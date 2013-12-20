@@ -12,13 +12,16 @@ see readme's in each directory for a more
 thorough explanation of their contents
 
 * topmost
+
   contains liscencing and all subdirectories
 
 * impStepPlts
+
 a directory designed to contain images.
 The makefile provides a quick command to create
 gifs
 
 * src
+
 contains source code.
 Most of this will be \.m files for Octave
