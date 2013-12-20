@@ -17,11 +17,11 @@ thorough explanation of their contents
 
 * impStepPlts
 
-a directory designed to contain images.
-The makefile provides a quick command to create
-gifs
+  a directory designed to contain images.
+  The makefile provides a quick command to create
+  gifs
 
 * src
 
-contains source code.
-Most of this will be \.m files for Octave
+  contains source code.
+  Most of this will be \.m files for Octave
