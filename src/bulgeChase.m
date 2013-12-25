@@ -21,8 +21,8 @@
 function [H, pltNum] = bulgeChase(A, Shifts, toplt = false, toprt = false)
   H=A;
 
-  pl = .05;#pause time when playing real time
-  
+  pl = .05; #pause time when playing real time
+
   if(toplt)
     mkdir('../impStepPlts');
     pltNum = 0;
@@ -36,10 +36,10 @@ function [H, pltNum] = bulgeChase(A, Shifts, toplt = false, toprt = false)
   do
     ++stIdx;
     ++endIdx;
-    
+
     #move bulges over
     tendIdx = endIdx;
-    for tstIdx = stIdx#for each 
+    for tstIdx = stIdx#for each
       #create house vector
       v = H(tstIdx:tendIdx, tstIdx-1);
       v(1) += sgn(v(1))*sqrt(v'*v);
@@ -49,7 +49,7 @@ function [H, pltNum] = bulgeChase(A, Shifts, toplt = false, toprt = false)
       H(1:tendIdx+1,tstIdx:tendIdx) -= (H(1:tendIdx+1,tstIdx:tendIdx)*(2*v))*v';
       H(tstIdx+1:tendIdx,tstIdx-1) = 0;#zeros everything out for exactness
       tendIdx = tstIdx;
-    endfor   
+    endfor
 
     #add shift to top if still need to add shifts
     if(!isempty(Shifts) && (isempty(stIdx) || stIdx(end) > 2))
@@ -62,7 +62,7 @@ function [H, pltNum] = bulgeChase(A, Shifts, toplt = false, toprt = false)
       #apply householder transformation to the right bits
       H(1:tendIdx,:) -= v*((2*v')*H(1:tendIdx,:));
       H(:,1:tendIdx) -= (H(:,1:tendIdx)*(2*v))*v';#many zero mulitplies
-     
+
       if(++bsize > 3 || isempty(Shifts))
         stIdx = [stIdx 1];
         bsize = 0;
@@ -78,14 +78,14 @@ function [H, pltNum] = bulgeChase(A, Shifts, toplt = false, toprt = false)
       endif
     end#if
     fflush(stdout);
-  until(endIdx + 1 >= length(H))#if it touches the bottom 
+  until(endIdx + 1 >= length(H))#if it touches the bottom
 
   ++stIdx;
 
   do
-    
+
     endIdx = length(H);
-    for tstIdx = stIdx#for each 
+    for tstIdx = stIdx#for each
       #create house vector
       v = H(tstIdx:endIdx, tstIdx-1);
       v(1) += sgn(v(1))*sqrt(v'*v);
@@ -97,12 +97,12 @@ function [H, pltNum] = bulgeChase(A, Shifts, toplt = false, toprt = false)
       H(tstIdx+1:endIdx,tstIdx-1) = 0;#zeros everything out for exactness
       endIdx = tstIdx;
     endfor
-    
+
     ++stIdx;
     if(stIdx(1) >= length(H))
       stIdx(1) = [];
     endif
-    
+
     if(toplt)
       pltMat(H);
       if(toprt)

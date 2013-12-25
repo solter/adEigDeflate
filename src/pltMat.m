@@ -15,6 +15,6 @@ end#function
 
 function [out] = logNAN10(in)
   out = log10(in);
-  out(isinf(out)) = nan; 
+  out(isinf(out)) = nan;
   out(out < -16) = nan;
 endfunction

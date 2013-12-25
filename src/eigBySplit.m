@@ -18,7 +18,7 @@
 ##    Should be less than ~12 to avoid shift blurring.@*
 ##
 ##Outputs:@*
-##  @var{EVal} - A list of the eigenvalues.@* 
+##  @var{EVal} - A list of the eigenvalues.@*
 ## @end deftypefn
 function [EVal] = eigBySplit(A, isHess = false, shifts = [])
   if(!isHess)
@@ -43,7 +43,7 @@ function [EVal] = eigBySplit(A, isHess = false, shifts = [])
 
   #extract spike values
   spike = [H(sp1+2:sp2-1,sp1); H(sp2, sp1+1:sp2-2)']
-    
+
   #+++++optimize shifts+++++
   while(0 && sum(abs(spike) < tol) < length(shifts)) #indicates good shifts
     #TODO: update shift estimate
@@ -53,9 +53,9 @@ function [EVal] = eigBySplit(A, isHess = false, shifts = [])
 
     #extract spike values
     spike = [H(sp1+2:sp2-1,sp1); H(sp2, sp1+1:sp2-2)'];
-    
+
   endwhile
-  EVal.sp = H;  
+  EVal.sp = H;
   #recollapse to hessenberg
   H = hess(H);
 

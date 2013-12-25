@@ -24,7 +24,7 @@ function [H, spSt, spEnd, pltNum] = colAndBust(A, topShifts, botShifts, toplt=fa
   tsl = length(topShifts);
   bsl = length(botShifts);
   _PAUSELEN = 0.1;#length to pause when printing
-  
+
     if(toplt)
       pltMat(H);
       if(toprt)
@@ -35,11 +35,11 @@ function [H, spSt, spEnd, pltNum] = colAndBust(A, topShifts, botShifts, toplt=fa
       endif
     end#if
   #put shifts into H
-  
+
   #add bulge to the top
   for i=1:tsl
     endIdx = 1+i;
-    
+
     #create house vector
     v = H(1:endIdx, 1);
     v(1) -= topShifts(i);
@@ -68,7 +68,7 @@ function [H, spSt, spEnd, pltNum] = colAndBust(A, topShifts, botShifts, toplt=fa
     v /= sqrt(v*v');#normalize house vector
     H((end-endIdx):end,:) -= v'*((2*v)*H((end-endIdx):end,:));#many zero multiplies
     H(:,(end-endIdx):end) -= (H(:,(end-endIdx):end)*(2*v'))*v;
-    
+
     if(toplt)
       pltMat(H);
       if(toprt)
@@ -88,7 +88,7 @@ function [H, spSt, spEnd, pltNum] = colAndBust(A, topShifts, botShifts, toplt=fa
   do
     ++tstIdx;
     ++tendIdx;
-    
+
     #move top bulge
     #create house vector
     v = H(tstIdx:tendIdx, tstIdx-1);
@@ -98,7 +98,7 @@ function [H, spSt, spEnd, pltNum] = colAndBust(A, topShifts, botShifts, toplt=fa
     H(tstIdx:tendIdx,:) -= v*((2*v')*H(tstIdx:tendIdx,:));
     H(1:tendIdx+1,tstIdx:tendIdx) -= (H(1:tendIdx+1,tstIdx:tendIdx)*(2*v))*v';
     H(tstIdx+1:tendIdx,tstIdx-1) = 0;#zeros everything out for exactness
-   
+
     --bendIdx;
     --bstIdx;
     if(tendIdx + 1 < bstIdx)#if they won't intersect

@@ -14,7 +14,7 @@ function [H] = hessen(A)
       v(1) -= sqrt(v'*v);
     endif
     v /= sqrt(v'*v);%normalize house vector
-    
+
     %apply householder transformation to the right bits
     H(i+1:endIdx,:) -= v*((2*v')*H(i+1:endIdx,:));
     H(1:min(endIdx+1,length(H)),i+1:endIdx) -= (H(1:min(endIdx+1,length(H)),i+1:endIdx)*(2*v))*v';

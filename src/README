@@ -34,7 +34,7 @@ adEvals.m (T):
 bulgeChase.m (I):
   Chases a train of bulges completely through a matrix.
   The shifts you feed it aren't equivalent to feeding QR the
-  same shifts. 
+  same shifts.
 
 agErlyDef.m (B):
   Chases a train of bulges to the bottom, creates a spike,

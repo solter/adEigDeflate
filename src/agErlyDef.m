@@ -34,7 +34,7 @@ function [H, pltNum] = agErlyDef(H, Shifts, toplt = false, toprt = false, spike 
   _EXTRASPIKE = .5*length(Shifts);#extra size of spike beyond shifts
   _RELTOL = 1e-6;
   _ABSTOL = 1e-14;
-  
+
   toprt = toprt && tplt;%must be plotting to print
 
   if(toprt)
@@ -51,10 +51,10 @@ function [H, pltNum] = agErlyDef(H, Shifts, toplt = false, toprt = false, spike 
   do
     ++stIdx;
     ++endIdx;
-    
+
     #move bulges over
     tendIdx = endIdx;
-    for tstIdx = stIdx#for each 
+    for tstIdx = stIdx#for each
       #create house vector
       v = H(tstIdx:tendIdx, tstIdx-1);
       v(1) += sgn(v(1))*sqrt(v'*v);
@@ -64,7 +64,7 @@ function [H, pltNum] = agErlyDef(H, Shifts, toplt = false, toprt = false, spike 
       H(1:tendIdx+1,tstIdx:tendIdx) -= (H(1:tendIdx+1,tstIdx:tendIdx)*(2*v))*v';
       H(tstIdx+1:tendIdx,tstIdx-1) = 0;#zeros everything out for exactness
       tendIdx = tstIdx;
-    endfor   
+    endfor
 
     #add shift to top if still need to add shifts
     if(!isempty(Shifts) && (isempty(stIdx) || stIdx(end) > 2))
@@ -77,7 +77,7 @@ function [H, pltNum] = agErlyDef(H, Shifts, toplt = false, toprt = false, spike 
       #apply householder transformation to the right bits
       H(1:tendIdx,:) -= v*((2*v')*H(1:tendIdx,:));
       H(:,1:tendIdx) -= (H(:,1:tendIdx)*(2*v))*v';#many zero mulitplies
-     
+
       if(++bsize >= _MAXBULGESIZE || isempty(Shifts))
         stIdx = [stIdx 1];
         bsize = 0;
@@ -101,10 +101,10 @@ function [H, pltNum] = agErlyDef(H, Shifts, toplt = false, toprt = false, spike 
       endif
     end#if
     fflush(stdout);
-  until(endIdx + 1 >= length(H))#if it touches the bottom 
+  until(endIdx + 1 >= length(H))#if it touches the bottom
 
   if(spike)
-    
+
     #create spike
     spSt = stIdx(end) - _EXTRASPIKE;#index of block
     [spRot,~] = schur(H(spSt:end,spSt:end));
@@ -125,7 +125,7 @@ function [H, pltNum] = agErlyDef(H, Shifts, toplt = false, toprt = false, spike 
     #chase spike off matrix
     stIdx = spSt;
     do
-            
+
       v = H(stIdx:end, stIdx-1);
       v(1) += sgn(v(1))*sqrt(v'*v);
       v /= sqrt(v'*v);#normalize house vector
@@ -135,7 +135,7 @@ function [H, pltNum] = agErlyDef(H, Shifts, toplt = false, toprt = false, spike 
       H(stIdx+1:end,stIdx-1) = 0;#zeros everything out for exactness
 
       stIdx++;
-      
+
       if(toplt)
         pltMat(H);
         if(toprt)
@@ -152,7 +152,7 @@ function [H, pltNum] = agErlyDef(H, Shifts, toplt = false, toprt = false, spike 
     ++stIdx;
     do
       endIdx = length(H);
-      for tstIdx = stIdx#for each 
+      for tstIdx = stIdx#for each
         #create house vector
         v = H(tstIdx:endIdx, tstIdx-1);
         v(1) += sgn(v(1))*sqrt(v'*v);
@@ -164,12 +164,12 @@ function [H, pltNum] = agErlyDef(H, Shifts, toplt = false, toprt = false, spike 
         H(tstIdx+1:endIdx,tstIdx-1) = 0;#zeros everything out for exactness
         endIdx = tstIdx;
       endfor
-      
+
       ++stIdx;
       if(stIdx(1) >= length(H))
         stIdx(1) = [];
       endif
-      
+
       if(toplt)
         pltMat(H);
         if(toprt)
@@ -207,6 +207,6 @@ end#function
 
 function [out] = logNAN10(in)
   out = log10(in);
-  out(isinf(out)) = nan; 
+  out(isinf(out)) = nan;
   out(out < -16) = nan;
 endfunction
