@@ -82,7 +82,7 @@ function [H, pltNum] = agErlyDef(H, Shifts, toplt = false, toprt = false, spike 
         stIdx = [stIdx 1];
         bsize = 0;
       endif
-    elseif( stIdx(end) > 3 )
+    elseif( stIdx(end) > 3 )#check for deflatable point
       #check for deflatable point
       potIdx = stIdx(end) - 2;
       #if entry is sufficientyly small
