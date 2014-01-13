@@ -31,7 +31,7 @@ function [H, pltNum] = agErlyDef(H, Shifts, toplt = false, toprt = false, spike 
 
   _PAUSELEN = 0.1;#pause time when playing real time
   _MAXBULGESIZE = 4;#maximum bulge size
-  _EXTRASPIKE = .5*length(Shifts);#extra size of spike beyond shifts
+  _EXTRASPIKE = floor(.5*length(Shifts));#extra size of spike beyond shifts
   _RELTOL = 1e-6;
   _ABSTOL = 1e-14;
 

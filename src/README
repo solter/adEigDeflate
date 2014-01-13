@@ -26,26 +26,20 @@ hessen.m (W):
 pltMat.m (W):
   Generates a plot of a matrix
 
-adEvals.m (T):
+bottom/adEvals.m (T):
   Calculates eigenvalues using aggresive early deflation.
   NOTE - this doesn't perform as advertised, currently has
   some logic built in but far from working/finished
 
-bulgeChase.m (I):
-  Chases a train of bulges completely through a matrix.
-  The shifts you feed it aren't equivalent to feeding QR the
-  same shifts.
-
-agErlyDef.m (B):
+bottom/agErlyDef.m (I):
   Chases a train of bulges to the bottom, creates a spike,
-  then cleans up the spike. This is buggy in that an odd number
-  of shifts breaks this.
+  then cleans up the spike.
 
-colAndBust.m (I):
+middle/colAndBust.m (I):
   Chases two bulges towards center from opposite ends, then explodes them.
   The shifts have same issue as bulgeChase, and it doesn't push trains.
 
-eigBySplit.m (T):
+middle/eigBySplit.m (T):
   Uses colAndBust to blow up matrix, then extracts the spikes.
   Is supposed to then use this info to update shift strategy and
   keep going until it can split the matrix, but currently is
@@ -64,13 +58,10 @@ KEY:
 * hessen :
   for reference. Octave's built in hess function is faster.
 
-* bulgeChase :
-  basic train chasing
+* agErlyDef :
+  basic train chasing with option of spike
 
--> agErlyDef :
-  bulgeChase + spike - traditional early deflation strategy
-
-->-> adEvals :
+-> adEvals :
   run through agErlyDef a bunch to perform complete eval calculation
 
 * colAndBust:
