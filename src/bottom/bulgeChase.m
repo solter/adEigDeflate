@@ -24,9 +24,9 @@ function [H, pltNum] = bulgeChase(A, Shifts, toplt = false, toprt = false)
   pl = .05; #pause time when playing real time
 
   if(toplt)
-    mkdir('../impStepPlts');
     pltNum = 0;
   else
+    mkdir('../impStepPlts');
     toprt = false;
   end#if
 
@@ -82,6 +82,7 @@ function [H, pltNum] = bulgeChase(A, Shifts, toplt = false, toprt = false)
 
   ++stIdx;
 
+  %push bulges off side
   do
 
     endIdx = length(H);
