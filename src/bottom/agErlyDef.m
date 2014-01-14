@@ -23,7 +23,7 @@
 ##    creating the spikes@*
 ## @end deftypefn
 function [H, pltNum] = agErlyDef(H, Shifts, toplt = false, toprt = false, spike = true)
-
+A = H;
 #TODO: actually deflate matrix, so far only finds deflation points while pushing bulges
 #need to do deflation logic for spike
 
@@ -33,9 +33,9 @@ function [H, pltNum] = agErlyDef(H, Shifts, toplt = false, toprt = false, spike 
   _MAXBULGESIZE = 4;#maximum bulge size
   _EXTRASPIKE = floor(.5*length(Shifts));#extra size of spike beyond shifts
   _RELTOL = 1e-6;
-  _ABSTOL = 1e-14;
+  _ABSTOL = 1e-8;
 
-  toprt = toprt && tplt;%must be plotting to print
+  toprt = toprt && toplt;%must be plotting to print
 
   if(toprt)
     mkdir('../impStepPlts');
@@ -46,7 +46,7 @@ function [H, pltNum] = agErlyDef(H, Shifts, toplt = false, toprt = false, spike 
 
   stIdx = [];#bulge starts
   defIx = [];#list of points to deflate at
-  endIdx = 1;#end of last bulge
+  endIdx = min(_MAXBULGESIZE,length(Shifts));#end of last bulge
   bsize = 0;#bulge size
   do
     ++stIdx;
@@ -67,21 +67,23 @@ function [H, pltNum] = agErlyDef(H, Shifts, toplt = false, toprt = false, spike 
     endfor
 
     #add shift to top if still need to add shifts
-    if(!isempty(Shifts) && (isempty(stIdx) || stIdx(end) > 2))
+    bsize = min( _MAXBULGESIZE,length(Shifts))+1;
+    if(!isempty(Shifts) && (isempty(stIdx) || stIdx(end) > bsize ) )
+      #calculate necessary polynomial bits
+      polyH = eye(bsize);
+      for i=1:bsize-1
+        polyH *= H(1:bsize,1:bsize) - Shifts(1)*eye(bsize);
+        Shifts(1) = [];
+      endfor
+      
       #create house vector
-      v = H(1:tendIdx, 1);
-      v(1) -= Shifts(1);
-      Shifts(1) = [];
+      v = polyH(1:bsize, 1);
       v(1) += sgn(v(1))*sqrt(v'*v);
       v /= sqrt(v'*v);#normalize house vector
       #apply householder transformation to the right bits
-      H(1:tendIdx,:) -= v*((2*v')*H(1:tendIdx,:));
-      H(:,1:tendIdx) -= (H(:,1:tendIdx)*(2*v))*v';#many zero mulitplies
-
-      if(++bsize >= _MAXBULGESIZE || isempty(Shifts))
-        stIdx = [stIdx 1];
-        bsize = 0;
-      endif
+      H(1:bsize,:) -= v*((2*v')*H(1:bsize,:));
+      H(:,1:bsize) -= (H(:,1:bsize)*(2*v))*v';#many zero mulitplies
+      stIdx = [stIdx 1];%add this to shift table
     elseif( stIdx(end) > 3 )#check for deflatable point
       #check for deflatable point
       potIdx = stIdx(end) - 2;
@@ -103,13 +105,19 @@ function [H, pltNum] = agErlyDef(H, Shifts, toplt = false, toprt = false, spike 
     fflush(stdout);
   until(endIdx + 1 >= length(H))#if it touches the bottom
 
+  printf('\nBulges hit the end, eigenvalues are different by: %g\n',max(sort(real(eig(A))) - sort(real(eig(H)))));
+
   if(spike)
 
     #create spike
     spSt = stIdx(end) - _EXTRASPIKE;#index of block
-    [spRot,~] = schur(H(spSt:end,spSt:end));
-    H(:,spSt:end) = H(:,spSt:end)*spRot;
-    H(spSt:end,(spSt-1):end) = spRot'*H(spSt:end,(spSt-1):end);
+    [spRot,H(spSt:end,spSt:end)] = schur(H(spSt:end,spSt:end));%compute schur decomp and do lower right portion
+    H(1:spSt-1,spSt:end) = H(1:spSt-1,spSt:end)*spRot;%upper right portion of H
+    #spike and zero out crappy stuff
+    sp = spRot(1,:)'*H(spSt,spSt-1);
+    sp(abs(sp) < _RELTOL*norm(sp,'inf')) = 0;
+    H(spSt:end,spSt-1) = sp;
+    #zero out entries in spike and lower portion which should be zero
 
     if(toplt)
       pltMat(H);
@@ -119,6 +127,8 @@ function [H, pltNum] = agErlyDef(H, Shifts, toplt = false, toprt = false, spike 
         pause(4*_PAUSELEN+.1);
       endif
     end#if
+  
+    printf('\nSpike formed, eigenvalues are different by: %g\n',max(sort(real(eig(A))) - sort(real(eig(H)))));
 
     #TODO: Deflate
 
@@ -128,12 +138,13 @@ function [H, pltNum] = agErlyDef(H, Shifts, toplt = false, toprt = false, spike 
 
       v = H(stIdx:end, stIdx-1);
       v(1) += sgn(v(1))*sqrt(v'*v);
-      v /= sqrt(v'*v);#normalize house vector
-      #apply householder transformation to the right bits
-      H(stIdx:end,:) -= v*((2*v')*H(stIdx:end,:));
-      H(1:end,stIdx:end) -= (H(1:end,stIdx:end)*(2*v))*v';
-      H(stIdx+1:end,stIdx-1) = 0;#zeros everything out for exactness
-
+      if(norm(v,'inf') > _ABSTOL)%don't do this if subdiag already 0
+        v /= sqrt(v'*v);#normalize house vector
+        #apply householder transformation to the right bits
+        H(stIdx:end,:) -= v*((2*v')*H(stIdx:end,:));
+        H(:,stIdx:end) -= (H(:,stIdx:end)*(2*v))*v';
+        H(stIdx+1:end,stIdx-1) = 0;#zeros everything out for exactness
+      endif
       stIdx++;
 
       if(toplt)
