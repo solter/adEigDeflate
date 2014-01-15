@@ -25,15 +25,15 @@ function [H, spSt, spEnd, pltNum] = colAndBust(A, topShifts, botShifts, toplt=fa
   bsl = length(botShifts);
   _PAUSELEN = 0.1;#length to pause when printing
 
-    if(toplt)
-      pltMat(H);
-      if(toprt)
-        pltNum=0;
-        print(sprintf('../impStepPlts/impstep%03d.png',++pltNum));
-      else
-        pause(_PAUSELEN);
-      endif
-    end#if
+  if(toplt)
+    pltMat(H);
+    if(toprt)
+      pltNum=0;
+      print(sprintf('../impStepPlts/impstep%03d.png',++pltNum));
+    else
+      pause(_PAUSELEN);
+    endif
+  end#if
   #put shifts into H
 
   #add bulge to the top
@@ -135,14 +135,14 @@ function [H, spSt, spEnd, pltNum] = colAndBust(A, topShifts, botShifts, toplt=fa
   spSt--;
   spEnd++;
 
-    if(toplt)
-      pltMat(H);
-      if(toprt)
-        print(sprintf('../impStepPlts/impstep%03d.png',++pltNum));
-      else
-        pause(_PAUSELEN);
-      endif
-    end#if
+  if(toplt)
+    pltMat(H);
+    if(toprt)
+      print(sprintf('../impStepPlts/impstep%03d.png',++pltNum));
+    else
+      pause(_PAUSELEN);
+    endif
+  end#if
 
   if(toprt)
     close all;

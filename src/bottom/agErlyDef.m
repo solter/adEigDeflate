@@ -23,11 +23,11 @@
 ##    creating the spikes@*
 ## @end deftypefn
 function [H, pltNum] = agErlyDef(H, Shifts, toplt = false, toprt = false, spike = true)
-A = H;
-#TODO: actually deflate matrix, so far only finds deflation points while pushing bulges
-#need to do deflation logic for spike
+  A = H;
+  #TODO: actually deflate matrix, so far only finds deflation points while pushing bulges
+  #need to do deflation logic for spike
 
-#TODO 2: implement derivatives... use in deflation logic
+  #TODO 2: implement derivatives... use in deflation logic
 
   _PAUSELEN = 0.1;#pause time when playing real time
   _MAXBULGESIZE = 4;#maximum bulge size
@@ -85,13 +85,11 @@ A = H;
       H(:,1:bsize) -= (H(:,1:bsize)*(2*v))*v';#many zero mulitplies
       stIdx = [stIdx 1];%add this to shift table
     elseif( stIdx(end) > 3 )#check for deflatable point
-      #check for deflatable point
       potIdx = stIdx(end) - 2;
       #if entry is sufficientyly small
       if ( abs( H(potIdx+1,potIdx)) < _RELTOL*( abs( H(potIdx,potIdx) )  + abs( H(potIdx + 1, potIdx + 1) ) ) || abs( H(potIdx+1,potIdx) ) < _ABSTOL)
         defIdx = [potIdx defIdx];
       endif
-
     endif
 
     if(toplt)
@@ -107,9 +105,7 @@ A = H;
 
   printf('\nBulges hit the end, eigenvalues are different by: %g\n',max(sort(real(eig(A))) - sort(real(eig(H)))));
 
-  if(spike)
-
-    #create spike
+  if(spike)#create spike
     spSt = stIdx(end) - _EXTRASPIKE;#index of block
     [spRot,H(spSt:end,spSt:end)] = schur(H(spSt:end,spSt:end));%compute schur decomp and do lower right portion
     H(1:spSt-1,spSt:end) = H(1:spSt-1,spSt:end)*spRot;%upper right portion of H
@@ -135,7 +131,6 @@ A = H;
     #chase spike off matrix
     stIdx = spSt;
     do
-
       v = H(stIdx:end, stIdx-1);
       v(1) += sgn(v(1))*sqrt(v'*v);
       if(norm(v,'inf') > _ABSTOL)%don't do this if subdiag already 0
@@ -155,11 +150,8 @@ A = H;
           pause(_PAUSELEN);
         endif
       end#if
-
     until(stIdx >= length(H))
-
   else#chase bulge off end
-
     ++stIdx;
     do
       endIdx = length(H);
@@ -189,9 +181,7 @@ A = H;
           pause(_PAUSELEN);
         endif
       end#if
-
     until(isempty(stIdx))
-
   endif%done with spiking branching
 
   if(toprt)
