@@ -1,3 +1,5 @@
 octave-core
 impStepPlts/**/*.png
 impStepPlts/**/*.gif
+*.log
+*.aux
