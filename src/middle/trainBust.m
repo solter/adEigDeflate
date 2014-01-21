@@ -1,4 +1,4 @@
-##-*- texinfo -*-
+##-*- texINFO -*-
 ##@deftypefn{Function File} {[@var{H}, @var{spSt}, @var{spEnd}, @var{pltNum}] =} trainBust(@var{A},@var{shifts})
 ##@deftypefnx{Function File} {[@var{H}, @var{spSt}, @var{spEnd}, @var{pltNum}] =} trainBust(@var{A},@var{shifts},@var{toplt})
 ##@deftypefnx{Function File} {[@var{H}, @var{spSt}, @var{spEnd}, @var{pltNum}] =} trainBust(@var{A},@var{shifts},@var{toplt},@var{toprt})
@@ -22,15 +22,19 @@
 ##Outputs:@*
 ##  @var{H} - The matrix A after running bulge trains into it's center and
 ##    creating the spikes@*
+##  @var{INFO} - a structure with INFOrmation. Fields:
+##    vspIdx -> vertical spike's column index
+##    hspIdx -> horizontal spike's row index (only for middle)
+##    nz -> count of zeros in spikes
 ## @end deftypefn
-function [H] = trainBust(H, Shifts, toplt = false, toprt = false, middle = true)
+function [H, INFO] = trainBust(H, Shifts, toplt = false, toprt = false, middle = true)
   A = H;
   #TODO: actually deflate matrix, so far only finds deflation points while pushing bulges
   #need to do deflation logic for spike
 
   #TODO 2: implement derivatives... use in deflation logic
 
-  _PAUSELEN = 0.7;#pause time when playing real time
+  _PAUSELEN = 0.0;#pause time when playing real time
   _MAXBULGESIZE = 4;#maximum bulge size
   _EXTRASPIKE = 0;#floor(.5*length(Shifts));#extra size of spike beyond shifts
   _RELTOL = 1e-6;
@@ -105,13 +109,13 @@ function [H] = trainBust(H, Shifts, toplt = false, toprt = false, middle = true)
         #apply householder transformation to the right bits
         H(n - tempEndIdx:n - tempStIdx,n - tempEndIdx - 1:n) -= v'*((2*v)*H(n - tempEndIdx:n - tempStIdx,n - tempEndIdx - 1:n));
         H(:,n - tempEndIdx:n - tempStIdx) -= (H(:,n - tempEndIdx:n - tempStIdx)*(2*v'))*v;
-  %      H(n - tempStIdx,n - tempEndIdx: n - tempStIdx-1) = 0;#zeros everything out for exactness
+        H(n - tempStIdx + 1,n - tempEndIdx: n - tempStIdx-1) = 0;#zeros everything out for exactness
         tempEndIdx = tempStIdx;
       endfor
 
       #add shift to bottom if still need to add shifts
       bsize = min( _MAXBULGESIZE,length(Shifts))+1;
-      if(!isempty(Shifts) && (isempty(bstIdx) || bstIdx(end) > bsize ) )
+      if(!isempty(Shifts) && (isempty(bstIdx) || bstIdx(end) + 1 > bsize ) )
         #calculate necessary polynomial bits
         polyH = eye(bsize);
         for i=1:bsize-1
@@ -132,8 +136,8 @@ function [H] = trainBust(H, Shifts, toplt = false, toprt = false, middle = true)
 
     else
       #reset these since nothing was done
-      ++bendIdx;
-      ++bstIdx;
+      --bendIdx;
+      --bstIdx;
     endif
 
     if(toplt)
@@ -145,19 +149,40 @@ function [H] = trainBust(H, Shifts, toplt = false, toprt = false, middle = true)
       endif
     end#if
     fflush(stdout);
-    doneb = !middle && tendIdx + 1 >= n;%check for hitting bottom
+    doneb = !middle && tendIdx + 2 >= n;%check for hitting bottom
     donem = middle && tendIdx + bendIdx + 3 > n;%check for meeting at middle
   until(donem || doneb)#if the trains are touching
 
   if(middle)#if doing middle deflation
+    spSt = tstIdx(end);
+    spEnd = n - bstIdx(end);
+    #compute Schur decomp and apply it to right bits
+    [spRot, H(spSt:spEnd,spSt:spEnd)] = schur(H(spSt:spEnd,spSt:spEnd));
+    H(1:spSt-1,spSt:spEnd) = H(1:spSt-1,spSt:spEnd) * spRot;
+    H(spSt:spEnd,spEnd+1:end) = spRot'*H(spSt:spEnd,spEnd+1:end);
+    #form spikes, make hard zeros, and put into H
+    vSpike = H(spSt,spSt-1) * spRot'(:,1);
+    hSpike = H(spEnd+1,spEnd) * spRot(end,:);
 
+    vsz = abs(vSpike) < _RELTOL*H(spSt,spSt-1);
+    hsz = abs(hSpike) < _RELTOL*H(spEnd+1,spEnd);
+    INFO.nz = sum(vsz) + sum(hsz);
+    vSpike(vsz) = 0;
+    hSpike(hsz) = 0;
+    INFO.vspIdx = spSt - 1;
+    INFO.hspIdx = spEnd+1;
+    H(spSt:spEnd,spSt-1) = vSpike;
+    H(spEnd+1,spSt:spEnd) = hSpike;
   else#if doing bottom deflation 
     spSt = tstIdx(end) - _EXTRASPIKE;#index of block
     [spRot,H(spSt:end,spSt:end)] = schur(H(spSt:end,spSt:end));%compute schur decomp and do lower right portion
     H(1:spSt-1,spSt:end) = H(1:spSt-1,spSt:end)*spRot;%upper right portion of H
     #spike and zero out crappy stuff
     sp = spRot(1,:)'*H(spSt,spSt-1);
-    sp(abs(sp) < _RELTOL*norm(sp,'inf')) = 0;
+    spz = abs(sp) < _RELTOL*H(spSt,spSt-1);
+    sp(spz) = 0;
+    INFO.nz = sum(spz);
+    INFO.vspIdx = spSt - 1;
     H(spSt:end,spSt-1) = sp;
   endif
 
