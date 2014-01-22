@@ -1,6 +1,7 @@
 
 addpath ../src
 
+N=13;
 A=[2.81014,-6.48911,-15.18678,21.77452,5.07491,-33.61697,7.69500,-3.21216,41.49093,16.75451,37.52472,-4.91861,30.00529;
 -79.66993,32.07671,-37.41973,27.72298,3.11131,-59.35638,-17.86218,18.53775,72.09095,3.57814,158.46592,284.03035,333.00127;
 0,17.26496,33.19817,-38.30290,-25.19686,31.03556,-58.71160,35.69149,-70.85779,-69.20413,73.02552,-81.81205,-153.14354;
@@ -14,6 +15,7 @@ A=[2.81014,-6.48911,-15.18678,21.77452,5.07491,-33.61697,7.69500,-3.21216,41.490
 0,0,0,0,0,0,0,0,0,-6.72820,22.71813,-19.60648,-28.18783;
 0,0,0,0,0,0,0,0,0,0,-1.11828,25.13190,9.08088;
 0,0,0,0,0,0,0,0,0,0,0,-20.40095,-4.33512];
+
 
 
 %N=19;
@@ -108,50 +110,41 @@ end
 
 
 
-A
-eig = sort(eig(A))'
+shifts = [41 37 31 29]
+ns = length(shifts);
 
-shifts = [2.00000, 3.00000]
-
-% create bulge on top
-A = submatrixProduct(A, 0, ...
-      householderAnnihilator( ...
-        firstColMatrixPolynomial(A(1:2, 1:2), A(3, 2), shifts)   ));
+%% create bulge on top
+%A = submatrixProduct(A, 0, ...
+%      householderAnnihilator( ...
+%        firstColMatrixPolynomial(A(1:ns, 1:ns), A(ns+1, ns), shifts)   ));
 
 % create bulge on bottom
-A = submatrixProduct(A, length(A)-length(shifts)-1, ...
+A = submatrixProduct(A, N-ns-1, ...
       householderAnnihilator( ...
-        % XXX - use of adtranspose here doesn't seem to matter, investigate this...
-        %firstColMatrixPolynomial(adtranspose(brref(A, 1:2, 1:2)), brref(A, 3, 2), fliplr(shifts))   ));
-        firstColMatrixPolynomial((brref(A, 1:2, 1:2)), brref(A, 3, 2), fliplr(shifts))   ));
-
-% chase top bulge
-A = submatrixProduct(A, 1, householderAnnihilator(A(2:4, 1)));
-A = submatrixProduct(A, 2, householderAnnihilator(A(3:5, 2)));
-A = submatrixProduct(A, 3, householderAnnihilator(A(4:6, 3)));
+        firstColMatrixPolynomial(A(1:ns, 1:ns), A(ns+1, ns), fliplr(shifts))   ));
 
 % chase bottom bulge
-A = submatrixProduct(A, length(A)-length(shifts)-2, ...
-      adtranspose(householderAnnihilator(adtranspose(brref(A, 1, 2:4))))   );
-A = submatrixProduct(A, length(A)-length(shifts)-3, ...
-      adtranspose(householderAnnihilator(adtranspose(brref(A, 2, 3:5))))   );
-A = submatrixProduct(A, length(A)-length(shifts)-4, ...
-      adtranspose(householderAnnihilator(adtranspose(brref(A, 3, 4:6))))   );
+for i = 1:(N-ns-1)
+	j=i+1;
+	A = submatrixProduct(A, N-ns-j, ...
+		  adtranspose(householderAnnihilator(adtranspose(brref(A, i, j:(j+ns)))))   );
+end
+
+disp "after chase"
+eig(A)'
 
 % spikes
-[Q, ~] = schur(A(4:10, 4:10), "real");
-A = submatrixProduct(A, 3, Q');
-
-
-
+r = 1:ns;
+[Q, ~] = schur(A(r, r), "real");
+A = submatrixProduct(A, 0, Q');
 
 % YIPPIE
-
-A
-disp("'ZERO' AT TIP OF VERTICAL SPIKE!");
-zero = A(10, 3)
-
+disp("eig of top left 4x4, bottom right 9x9");
+r = 1:ns;     eig(A(r,r))'
+r = (ns+1):N; eig(A(r,r))'
 A = hess(A)
-disp("'ZERO' IN BOTTOM RIGHT CORNER!");
-zero = A(12, 11)
+
+disp("eig of top left 4x4, bottom right 9x9");
+r = 1:ns;     eig(A(r,r))'
+r = (ns+1):N; eig(A(r,r))'
 
