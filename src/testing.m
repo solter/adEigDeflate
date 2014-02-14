@@ -1,4 +1,4 @@
-n = 10;
+n = 1000;
 vals = nan(n,2);
 for tomid = [true, false]
   dirt = '';

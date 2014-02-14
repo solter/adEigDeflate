@@ -37,7 +37,11 @@ bottom/agErlyDef.m (I):
 
 middle/colAndBust.m (I):
   Chases two bulges towards center from opposite ends, then explodes them.
-  The shifts have same issue as bulgeChase, and it doesn't push trains.
+  This doesn't push trains. The shifts aren't the traditional shifts
+
+middle/trainBust.m (W?):
+  Chases two bulge trains towards center from opposite ends, then explodes them.
+  Will also chase bulges to the top and bottom
 
 middle/eigBySplit.m (T):
   Uses colAndBust to blow up matrix, then extracts the spikes.

@@ -9,7 +9,9 @@
 ##  @var{A} - A hessenberg matrix. Results will be meaningless if not hessenberg.@*
 ##  @var{topshifts}, @var{botshifts} - Lists of shifts to introduce in the top and bottom bulges respectively.
 ##    Should be less than ~6 to avoid shift blurring.@*
-##  @var{toplt} - Optional argument. If it is true, this function
+##  @var{toplt} - Optional argument. If it is true, a plot
+##    of the matrix will be plotted at each step
+##  @var{toprt} - Optional argument. If it is true, this function
 ##    will create a directory ../impStepPlts and plot each step of the
 ##    bulge creation and chasing to it.@*
 ##
