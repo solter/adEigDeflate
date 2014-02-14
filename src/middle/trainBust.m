@@ -9,9 +9,12 @@
 ##
 ##Inputs:@*
 ##  @var{A} - A hessenberg matrix. Results will be meaningless if not hessenberg.@*
-##  @var{shifts}, - Lists of shifts to introduce in the bulges.
+##  @var{shifts} - Lists of shifts to introduce in the bulges.
 ##    For indentical shifts in top and bottom, this should be symmetric.
 ##    AKA: @var{shifts}(1) = @var{shifts}(end); @var{shifts}(2) = @var{shifts}(end - 1); ...@*
+##  @var{shiftSeed} - Matrix of directions for shift derivatives.
+##    Each row should represent a different direction, thus for d directions and s
+##    shifts this matrix will be d by s.@*
 ##  @var{toplt} - Optional argument. If it is true, this function
 ##    will plot each step of the bulge creation and chasing.@*
 ##  @var{toprt} - Optional argument. If it is true, this function
@@ -23,12 +26,15 @@
 ##Outputs:@*
 ##  @var{H} - The matrix A after running bulge trains into it's center and
 ##    creating the spikes@*
+##  @var{shiftDerivs} - The derivative of the spikes w.r.t. the shifts in the directions
+##    specified by @var{shiftSeed}. This will only represent the smallest values
+##    in the spike, so will be the same dimensions as @var{shiftSeed}.
 ##  @var{INFO} - a structure with INFOrmation. Fields:
 ##    vspIdx -> vertical spike's column index
 ##    hspIdx -> horizontal spike's row index (only for middle)
 ##    nz -> count of zeros in spikes
 ## @end deftypefn
-function [H, INFO] = trainBust(H, Shifts, toplt = false, toprt = false, middle = 'm')
+function [H, shiftDerivs, INFO] = trainBust(H, Shifts, shiftSeed, toplt = false, toprt = false, middle = 'm')
   A = H;
   #TODO: actually deflate matrix, so far only finds deflation points while pushing bulges
   #need to do deflation logic for spike

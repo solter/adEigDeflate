@@ -1,0 +1,14 @@
+The function to use is 'trainbust'.
+You will note that I put 1 extra input and 1 extra output in the definition,
+to run it as before just do put []'s into the extra spot.
+
+As for the returned derivative value - see the comment at the top of the function
+for a description of how I envision it. This could be flat out wrong,
+so if it is please update the comment at the top of the trainbust to accurately
+reflect what the derivative represents.
+
+Furthermore, please leave commit messages specifying that you changed it
+so I know without running diff.
+
+Thanks,
+-Peter
