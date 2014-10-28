@@ -49,6 +49,7 @@ function [H, shiftDerivs, INFO] = trainBust(H, Shifts, shiftSeed, toplt = false,
   _RELTOL = 1e-6;
   n = length(H);#convenience shorthand
   toprt = toprt && toplt;%must be plotting to print
+  INFO = struct();
 
   if(toprt)
     mkdir('../impStepPlts');
@@ -73,7 +74,7 @@ function [H, shiftDerivs, INFO] = trainBust(H, Shifts, shiftSeed, toplt = false,
       tempEndIdx = tendIdx;
       for tempStIdx = tstIdx#for each
         %perform householder step
-        H = hhStep(H,tempStIdx,tempEndIdx);
+        H = hhStepR(H,tempStIdx,tempEndIdx);
         tempEndIdx = tempStIdx;
       endfor
 
@@ -90,7 +91,7 @@ function [H, shiftDerivs, INFO] = trainBust(H, Shifts, shiftSeed, toplt = false,
         endfor
         
         #create house vector
-        H = hhStep(H,1,bsize,polyH(1:bsize,1));
+        H = hhStepR(H,1,bsize,polyH(1:bsize,1));
         tstIdx = [tstIdx 1];#add this to index (shift) table
       endif
     endif
@@ -103,14 +104,7 @@ function [H, shiftDerivs, INFO] = trainBust(H, Shifts, shiftSeed, toplt = false,
       #shift up the bottom bulges
       tempEndIdx = bendIdx;
       for tempStIdx = bstIdx#for each
-        #create house vector
-        v = H(n - tempStIdx + 1, n - tempEndIdx:n - tempStIdx);
-        v(end) += sgn(v(end))*sqrt(v*v');
-        v /= sqrt(v*v');#normalize house vector
-        #apply householder transformation to the right bits
-        H(n - tempEndIdx:n - tempStIdx,n - tempEndIdx - 1:n) -= v'*((2*v)*H(n - tempEndIdx:n - tempStIdx,n - tempEndIdx - 1:n));
-        H(:,n - tempEndIdx:n - tempStIdx) -= (H(:,n - tempEndIdx:n - tempStIdx)*(2*v'))*v;
-        H(n - tempStIdx + 1,n - tempEndIdx: n - tempStIdx-1) = 0;#zeros everything out for exactness
+        H = hhStepB(H,tempStIdx,tempEndIdx);
         tempEndIdx = tempStIdx;
       endfor
 
@@ -124,13 +118,8 @@ function [H, shiftDerivs, INFO] = trainBust(H, Shifts, shiftSeed, toplt = false,
           Shifts(end) = [];
         endfor
         
+        H = hhStepB(H,0,bsize-1,polyH(end,:));
         #create house vector
-        v = polyH(end,:);
-        v(end) += sgn(v(end))*sqrt(v*v');
-        v /= sqrt(v*v');#normalize house vector
-        #apply householder transformation to the right bits
-        H(n-bsize+1:n,n - bsize - 1:n) -= v'*((2*v)*H(n-bsize+1:n,n - bsize - 1:n));
-        H(:,n-bsize+1:n) -= (H(:,n-bsize+1:n)*(2*v'))*v;#many zero mulitplies
         bstIdx = [bstIdx 0];#add this to shift table
       endif
 
@@ -156,47 +145,26 @@ function [H, shiftDerivs, INFO] = trainBust(H, Shifts, shiftSeed, toplt = false,
   until(donet || donem || doneb)#if the trains are touching
 
   if(middle == 'm')#if doing middle deflation
+    
     spSt = tstIdx(end);
     spEnd = n - bstIdx(end);
-    #compute Schur decomp and apply it to right bits
-    [spRot, H(spSt:spEnd,spSt:spEnd)] = schur(H(spSt:spEnd,spSt:spEnd));
-    H(1:spSt-1,spSt:spEnd) = H(1:spSt-1,spSt:spEnd) * spRot;
-    H(spSt:spEnd,spEnd+1:end) = spRot'*H(spSt:spEnd,spEnd+1:end);
-    #form spikes, make hard zeros, and put into H
-    vSpike = spRot'(:,1);
-    hSpike = spRot(end,:);
 
-    vsz = abs(vSpike) < _RELTOL;
-    hsz = abs(hSpike) < _RELTOL;
-    INFO.nz = sum(vsz) + sum(hsz);
-    vSpike(vsz) = 0;
-    hSpike(hsz) = 0;
-    INFO.vspIdx = spSt - 1;
-    INFO.hspIdx = spEnd+1;
-    H(spSt:spEnd,spSt-1) = H(spSt,spSt-1) * vSpike;
-    H(spEnd+1,spSt:spEnd) = H(spEnd+1,spEnd) * hSpike;
+    [H, INFO] = schurComp(H, spSt, spEnd, INFO, _RELTOL);
+
   elseif(middle == 'b')#if doing bottom deflation 
+
     spSt = tstIdx(end) - _EXTRASPIKE;#index of block
-    [spRot,H(spSt:end,spSt:end)] = schur(H(spSt:end,spSt:end));%compute schur decomp and do lower right portion
-    H(1:spSt-1,spSt:end) = H(1:spSt-1,spSt:end)*spRot;%upper right portion of H
-    #spike and zero out crappy stuff
-    sp = spRot'(:,1);
-    spz = abs(sp) < _RELTOL;
-    sp(spz) = 0;
-    INFO.nz = sum(spz);
-    INFO.vspIdx = spSt - 1;
-    H(spSt:end,spSt-1) = H(spSt,spSt-1)*sp;
+    spEnd = n;
+    
+    [H, INFO] = schurComp(H, spSt, spEnd, INFO, _RELTOL);
+
   elseif(middle == 't')#if doing top deflation 
+  
+    spSt = 1;
     spEnd = n - bstIdx(end) + 1 + _EXTRASPIKE;#index of block
-    [spRot,H(1:spEnd,1:spEnd)] = schur(H(1:spEnd,1:spEnd));%compute schur decomp and do upper left portion
-    H(1:spEnd,spEnd+1:end) = spRot'*H(1:spEnd,spEnd+1:end);%upper right portion of H
-    #spike and zero out crappy stuff
-    sp = spRot(end,:);
-    spz = abs(sp) < _RELTOL;
-    sp(spz) = 0;
-    INFO.nz = sum(spz);
-    INFO.hspIdx = spEnd+1;
-    H(spEnd + 1,1:spEnd) = H(spEnd + 1,spEnd)* sp;
+ 
+    [H, INFO] = schurComp(H, spSt, spEnd, INFO, _RELTOL);
+
   endif
 
   if(toplt)
@@ -237,7 +205,7 @@ function [out] = logNAN10(in)
 endfunction
 
 #perform a householder transformation, pushing a bulge rightwards
-function [H] = hhStep(H,stIdx, eIdx,v=[])
+function [H] = hhStepR(H,stIdx, eIdx,v=[])
 
   #create house vector
   if(length(v) ~= eIdx - stIdx + 1)#if a vector is not provided
@@ -252,4 +220,60 @@ function [H] = hhStep(H,stIdx, eIdx,v=[])
   if(stIdx > 1)
     H(stIdx+1:eIdx,stIdx-1) = 0;#zeros everything out for exactness
   end
+end
+
+#perform a householder transformation, pushing a bulge from bottom
+function [H] = hhStepB(H,stIdx, eIdx,v=[])
+  n = length(H);
+  
+  #create house vector
+  if(length(v) ~= eIdx - stIdx + 1)#if a vector is not provided
+    v = H(n - stIdx + 1, n - eIdx:n - stIdx);
+  end
+  v(end) += sgn(v(end))*sqrt(v*v');
+  v /= sqrt(v*v');#normalize house vector
+  
+  #apply householder transformation to the right bits
+  H(n - eIdx:n - stIdx,n - eIdx - 1:n) -= v'*((2*v)*H(n - eIdx:n - stIdx,n - eIdx - 1:n));
+  H(:,n - eIdx:n - stIdx) -= (H(:,n - eIdx:n - stIdx)*(2*v'))*v;
+  if(stIdx > 1)
+    H(n - stIdx + 1,n - eIdx: n - stIdx-1) = 0;#zeros everything out for exactness
+  end
+end
+
+#perform the schur decomposition
+function [H,INFO] = schurComp(H,spSt,spEnd,INFO,_RELTOL)
+  
+  n = length(H);
+  INFO.nz = 0;
+
+  #actually perform the schur decomposiotn
+  [spRot, H(spSt:spEnd,spSt:spEnd)] = schur(H(spSt:spEnd,spSt:spEnd));
+  if(spSt > 1)%apply it to the left/top portion
+    H(1:spSt-1,spSt:spEnd) = H(1:spSt-1,spSt:spEnd) * spRot;
+  end
+  if(spEnd < n)%apply it to the right/bottom portion
+    H(spSt:spEnd,spEnd+1:n) = spRot'*H(spSt:spEnd,spEnd+1:n);
+  end
+
+  #form spikes, make hard zeros, and put into H
+  vSpike = spRot'(:,1);
+  hSpike = spRot(end,:);
+  vsz = abs(vSpike) < _RELTOL;
+  hsz = abs(hSpike) < _RELTOL;
+  vSpike(vsz) = 0;
+  hSpike(hsz) = 0;
+  
+  
+  if(spEnd < n)%apply it to the right/bottom portion
+    H(spEnd+1,spSt:spEnd) = H(spEnd+1,spEnd) * hSpike;
+    INFO.nz += sum(hsz);
+    INFO.hspIdx = spEnd + 1;
+  end
+  if(spSt > 1)%apply it to the left/top portion
+    H(spSt:spEnd,spSt-1) = H(spSt,spSt-1) * vSpike;
+    INFO.nz += sum(vsz);
+    INFO.vspIdx = spSt - 1;
+  end
+
 end
