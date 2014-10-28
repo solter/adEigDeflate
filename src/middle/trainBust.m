@@ -35,6 +35,8 @@
 ##    nz -> count of zeros in spikes
 ## @end deftypefn
 function [H, shiftDerivs, INFO] = trainBust(H, Shifts, shiftSeed, toplt = false, toprt = false, middle = 'm')
+
+  
   A = H;
   #TODO: actually deflate matrix, so far only finds deflation points while pushing bulges
   #need to do deflation logic for spike
@@ -70,14 +72,8 @@ function [H, shiftDerivs, INFO] = trainBust(H, Shifts, shiftSeed, toplt = false,
       #move top bulges over
       tempEndIdx = tendIdx;
       for tempStIdx = tstIdx#for each
-        #create house vector
-        v = H(tempStIdx:tempEndIdx, tempStIdx-1);
-        v(1) += sgn(v(1))*sqrt(v'*v);
-        v /= sqrt(v'*v);#normalize house vector
-        #apply householder transformation to the right bits
-        H(tempStIdx:tempEndIdx,:) -= v*((2*v')*H(tempStIdx:tempEndIdx,:));
-        H(1:tempEndIdx+1,tempStIdx:tempEndIdx) -= (H(1:tempEndIdx+1,tempStIdx:tempEndIdx)*(2*v))*v';
-        H(tempStIdx+1:tempEndIdx,tempStIdx-1) = 0;#zeros everything out for exactness
+        %perform householder step
+        H = hhStep(H,tempStIdx,tempEndIdx);
         tempEndIdx = tempStIdx;
       endfor
 
@@ -86,19 +82,16 @@ function [H, shiftDerivs, INFO] = trainBust(H, Shifts, shiftSeed, toplt = false,
       if(!isempty(Shifts) && (isempty(tstIdx) || tstIdx(end) > bsize ) )
         #calculate necessary polynomial bits
         polyH = eye(bsize);
+        #explicitly form the polynomial of shifts to shove in.
+        #Note that this is < _MAXBULGESIZE x _MAXBULGESIZE so is easy
         for i=1:bsize-1
           polyH *= H(1:bsize,1:bsize) - Shifts(1)*eye(bsize);
           Shifts(1) = [];
         endfor
         
         #create house vector
-        v = polyH(1:bsize, 1);
-        v(1) += sgn(v(1))*sqrt(v'*v);
-        v /= sqrt(v'*v);#normalize house vector
-        #apply householder transformation to the right bits
-        H(1:bsize,:) -= v*((2*v')*H(1:bsize,:));
-        H(1:bsize+1,1:bsize) -= (H(1:bsize+1,1:bsize)*(2*v))*v';#many zero mulitplies
-        tstIdx = [tstIdx 1];#add this to shift table
+        H = hhStep(H,1,bsize,polyH(1:bsize,1));
+        tstIdx = [tstIdx 1];#add this to index (shift) table
       endif
     endif
 
@@ -242,3 +235,21 @@ function [out] = logNAN10(in)
   out(isinf(out)) = nan;
   out(out < -16) = nan;
 endfunction
+
+#perform a householder transformation, pushing a bulge rightwards
+function [H] = hhStep(H,stIdx, eIdx,v=[])
+
+  #create house vector
+  if(length(v) ~= eIdx - stIdx + 1)#if a vector is not provided
+    v = H(stIdx:eIdx, stIdx-1);
+  end
+  v(1) += sgn(v(1))*sqrt(v'*v);
+  v /= sqrt(v'*v);#normalize house vector
+
+  #apply householder transformation to the right bits
+  H(stIdx:eIdx,:) -= v*((2*v')*H(stIdx:eIdx,:));
+  H(1:eIdx+1,stIdx:eIdx) -= (H(1:eIdx+1,stIdx:eIdx)*(2*v))*v';
+  if(stIdx > 1)
+    H(stIdx+1:eIdx,stIdx-1) = 0;#zeros everything out for exactness
+  end
+end
