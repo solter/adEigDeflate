@@ -78,15 +78,18 @@ function [H, shiftDerivs, INFO] = trainBust(H, Shifts, shiftSeed, toplt = false,
 
       #add shift to top if still need to add shifts
       if(middle == 'b')
-        bsize = min( _MAXBULGESIZE,length(Shifts));
+        #The +1 is because the bulge will contain bsize - 1 shifts
+        bsize = min( _MAXBULGESIZE,length(Shifts)) + 1;
       elseif(middle == 'm')
-        bsize = min( _MAXBULGESIZE, ceil(length(Shifts)/2));
+        #The +1 is because the bulge will contain bsize - 1 shifts
+        bsize = min( _MAXBULGESIZE, ceil(length(Shifts)/2)) + 1;
       end
-      if(!isempty(Shifts) && (isempty(tstIdx) || tstIdx(end) > bsize ) )
+      if(!isempty(Shifts) && (isempty(tstIdx) || tstIdx(end) > bsize ) );
         #calculate necessary polynomial bits
         polyH = eye(bsize);
         #explicitly form the polynomial of shifts to shove in.
-        for i=1:bsize
+        #Note that it should be 1:bsize-1 to account for fill in
+        for i=1:bsize-1
           polyH *= H(1:bsize,1:bsize) - Shifts(1)*eye(bsize);
           Shifts(1) = [];
         endfor
@@ -113,12 +116,14 @@ function [H, shiftDerivs, INFO] = trainBust(H, Shifts, shiftSeed, toplt = false,
       endfor
       
       #add shift to bottom if still need to add shifts
-      bsize = min( _MAXBULGESIZE,length(Shifts));
+      #The +1 is because the bulge will contain bsize - 1 shifts
+      bsize = min( _MAXBULGESIZE,length(Shifts))+1;
       if(!isempty(Shifts) && (isempty(bstIdx) || bstIdx(end) + 1 > bsize ) )
         #calculate necessary polynomial bits
         polyH = eye(bsize);
         #explicitly form the polynomial of shifts to shove in.
-        for i=1:bsize
+        #Note that it should be 1:bsize-1 to account for fill in
+        for i=1:bsize-1
           polyH *= H(n-bsize+1:n,n-bsize+1:n) - Shifts(end)*eye(bsize);
           Shifts(end) = [];
         endfor
