@@ -44,7 +44,7 @@ function [H, shiftDerivs, INFO] = trainBust(H, Shifts, shiftSeed, toplt = false,
   #TODO 2: implement derivatives... use in deflation logic
 
   _PAUSELEN = 0.0;#pause time when playing real time
-  _MAXBULGESIZE = 4;#maximum bulge size
+  _MAXBULGESIZE = 5;#maximum bulge size
   _EXTRASPIKE = 0;#floor(.5*length(Shifts));#extra size of spike beyond shifts
   _RELTOL = 1e-6;
   n = length(H);#convenience shorthand
@@ -59,11 +59,9 @@ function [H, shiftDerivs, INFO] = trainBust(H, Shifts, shiftSeed, toplt = false,
   end#if
 
   tstIdx = [];#top bulge starts
+  tendIdx = -1;
   bstIdx = [];#bottom bulge starts
-  #end of bottom bulge on top train
-  tendIdx = min(_MAXBULGESIZE,ceil(length(Shifts)/2));
-  #how far top of bottom train is from the right side
-  bendIdx = min(_MAXBULGESIZE,floor(length(Shifts)/2)) - 1;
+  bendIdx = -1;
   do
     #TOP BULGE LOGIC
     ++tstIdx;
@@ -74,46 +72,53 @@ function [H, shiftDerivs, INFO] = trainBust(H, Shifts, shiftSeed, toplt = false,
       tempEndIdx = tendIdx;
       for tempStIdx = tstIdx#for each
         %perform householder step
-        H = hhStepR(H,tempStIdx,tempEndIdx);
+        H = hhStepR(H,tempStIdx,tempEndIdx+1);
         tempEndIdx = tempStIdx;
       endfor
 
       #add shift to top if still need to add shifts
-      bsize = min( _MAXBULGESIZE,ceil(length(Shifts)/2))+1;
+      if(middle == 'b')
+        bsize = min( _MAXBULGESIZE,length(Shifts));
+      elseif(middle == 'm')
+        bsize = min( _MAXBULGESIZE, ceil(length(Shifts)/2));
+      end
       if(!isempty(Shifts) && (isempty(tstIdx) || tstIdx(end) > bsize ) )
         #calculate necessary polynomial bits
         polyH = eye(bsize);
         #explicitly form the polynomial of shifts to shove in.
-        #Note that this is < _MAXBULGESIZE x _MAXBULGESIZE so is easy
-        for i=1:bsize-1
+        for i=1:bsize
           polyH *= H(1:bsize,1:bsize) - Shifts(1)*eye(bsize);
           Shifts(1) = [];
         endfor
-        
+
         #create house vector
-        H = hhStepR(H,1,bsize,polyH(1:bsize,1));
+        H = hhStepR(H,1,bsize,polyH(:,1));
         tstIdx = [tstIdx 1];#add this to index (shift) table
+        if(tendIdx == 0)
+          tendIdx = bsize;
+        end
       endif
     endif
 
     #BOTTOM TRAIN
-    ++bendIdx;
-    ++bstIdx;
     if(middle == 't' || (middle == 'm' && tendIdx + bendIdx + 1 < n))#if they won't intersect
-    
+      ++bendIdx;
+      ++bstIdx;
+       
       #shift up the bottom bulges
       tempEndIdx = bendIdx;
       for tempStIdx = bstIdx#for each
         H = hhStepB(H,tempStIdx,tempEndIdx);
         tempEndIdx = tempStIdx;
       endfor
-
+      
       #add shift to bottom if still need to add shifts
-      bsize = min( _MAXBULGESIZE,length(Shifts))+1;
+      bsize = min( _MAXBULGESIZE,length(Shifts));
       if(!isempty(Shifts) && (isempty(bstIdx) || bstIdx(end) + 1 > bsize ) )
         #calculate necessary polynomial bits
         polyH = eye(bsize);
-        for i=1:bsize-1
+        #explicitly form the polynomial of shifts to shove in.
+        for i=1:bsize
           polyH *= H(n-bsize+1:n,n-bsize+1:n) - Shifts(end)*eye(bsize);
           Shifts(end) = [];
         endfor
@@ -121,12 +126,11 @@ function [H, shiftDerivs, INFO] = trainBust(H, Shifts, shiftSeed, toplt = false,
         H = hhStepB(H,0,bsize-1,polyH(end,:));
         #create house vector
         bstIdx = [bstIdx 0];#add this to shift table
+        if(bendIdx == 0)
+          bendIdx = bsize;
+        end
       endif
-
-    else
-      #reset these since nothing was done
-      --bendIdx;
-      --bstIdx;
+      
     endif
 
     if(toplt)
@@ -140,32 +144,24 @@ function [H, shiftDerivs, INFO] = trainBust(H, Shifts, shiftSeed, toplt = false,
     fflush(stdout);
 
     doneb = middle == 'b' && tendIdx + 1 >= n;%check for hitting bottom
-    donet = middle == 't' && bendIdx + 2 >= n;%check for hitting bottom
+    donet = middle == 't' && bendIdx + 1 >= n;%check for hitting bottom
     donem = middle == 'm' && tendIdx + bendIdx + 3 > n;%check for meeting at middle
   until(donet || donem || doneb)#if the trains are touching
 
+  INFO.nz = 0;
+
   if(middle == 'm')#if doing middle deflation
-    
     spSt = tstIdx(end);
     spEnd = n - bstIdx(end);
-
-    [H, INFO] = schurComp(H, spSt, spEnd, INFO, _RELTOL);
-
   elseif(middle == 'b')#if doing bottom deflation 
-
     spSt = tstIdx(end) - _EXTRASPIKE;#index of block
     spEnd = n;
-    
-    [H, INFO] = schurComp(H, spSt, spEnd, INFO, _RELTOL);
-
   elseif(middle == 't')#if doing top deflation 
-  
     spSt = 1;
     spEnd = n - bstIdx(end) + 1 + _EXTRASPIKE;#index of block
- 
-    [H, INFO] = schurComp(H, spSt, spEnd, INFO, _RELTOL);
-
   endif
+    
+  [H, INFO] = schurComp(H, spSt, spEnd, INFO, _RELTOL);
 
   if(toplt)
     pltMat(H);
@@ -216,7 +212,8 @@ function [H] = hhStepR(H,stIdx, eIdx,v=[])
 
   #apply householder transformation to the right bits
   H(stIdx:eIdx,:) -= v*((2*v')*H(stIdx:eIdx,:));
-  H(1:eIdx+1,stIdx:eIdx) -= (H(1:eIdx+1,stIdx:eIdx)*(2*v))*v';
+  maxEff = min(length(H),eIdx + 1);
+  H(1:maxEff,stIdx:eIdx) -= (H(1:maxEff,stIdx:eIdx)*(2*v))*v';
   if(stIdx > 1)
     H(stIdx+1:eIdx,stIdx-1) = 0;#zeros everything out for exactness
   end
@@ -234,7 +231,8 @@ function [H] = hhStepB(H,stIdx, eIdx,v=[])
   v /= sqrt(v*v');#normalize house vector
   
   #apply householder transformation to the right bits
-  H(n - eIdx:n - stIdx,n - eIdx - 1:n) -= v'*((2*v)*H(n - eIdx:n - stIdx,n - eIdx - 1:n));
+  minEff = max(1,n - eIdx - 1);
+  H(n - eIdx:n - stIdx, minEff:n) -= v'*((2*v)*H(n - eIdx:n - stIdx,minEff:n));
   H(:,n - eIdx:n - stIdx) -= (H(:,n - eIdx:n - stIdx)*(2*v'))*v;
   if(stIdx > 1)
     H(n - stIdx + 1,n - eIdx: n - stIdx-1) = 0;#zeros everything out for exactness
