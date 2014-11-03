@@ -220,7 +220,7 @@ function [H] = hhStepR(H,stIdx, eIdx,v=[])
   maxEff = min(length(H),eIdx + 1);
   H(1:maxEff,stIdx:eIdx) -= (H(1:maxEff,stIdx:eIdx)*(2*v))*v';
   if(stIdx > 1)
-    H(stIdx+1:eIdx,stIdx-1) = 0;#zeros everything out for exactness
+    H(stIdx+1:maxEff,stIdx-1) = 0;#zeros everything out for exactness
   end
 end
 
@@ -239,8 +239,8 @@ function [H] = hhStepB(H,stIdx, eIdx,v=[])
   minEff = max(1,n - eIdx - 1);
   H(n - eIdx:n - stIdx, minEff:n) -= v'*((2*v)*H(n - eIdx:n - stIdx,minEff:n));
   H(:,n - eIdx:n - stIdx) -= (H(:,n - eIdx:n - stIdx)*(2*v'))*v;
-  if(stIdx > 1)
-    H(n - stIdx + 1,n - eIdx: n - stIdx-1) = 0;#zeros everything out for exactness
+  if(stIdx > 0)
+    H(n - stIdx + 1,minEff: n - stIdx-1) = 0;#zeros everything out for exactness
   end
 end
 
