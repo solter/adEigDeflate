@@ -35,6 +35,12 @@
 ## @end deftypefn
 function [H, shiftDerivs, INFO] = trainBust(H, Shifts, shiftSeed, toplt = false, toprt = false, middle = 'm')
 
+  #NOTE: all the derivatives MUST be updated before the quantity is
+
+  #TODO: fix the (I-vv')H(I-vv') derivatives. There's an issue in that
+  #we really only form the small non-zero v, which fails to accurately
+  #recreate the last 2 terms as currently coded
+
   #TODO: actually deflate matrix, so far only finds deflation points while pushing bulges
   #need to do deflation logic for spike
 
@@ -43,23 +49,25 @@ function [H, shiftDerivs, INFO] = trainBust(H, Shifts, shiftSeed, toplt = false,
   _EXTRASPIKE = 0;#floor(.5*length(Shifts));#extra size of spike beyond shifts
   _RELTOL = 1e-6;
   n = length(H);#convenience shorthand
-  s = length(Shifts);
   toprt = toprt && toplt;#must be plotting to print
   INFO = struct();
   sym = norm(H - H','inf') < sqrt(eps);
   #the structure to hold all the derivative information
+
+  #make sure shiftSeed is flat
+  if(~isempty(shiftSeed) && size(shiftSeed,2) ~= length(Shifts))
+    shiftSeed = shiftSeed';
+    if(size(shiftSeed,2) ~= length(Shifts))
+      error("one dimension of shiftSeed should be number of shifts");
+    end
+  end
+
+  s = size(shiftSeed,1);
   dots = cell(s,1);
+
   for i=1:s
     dots{i}.seed = shiftSeed(i,:);
     dots{i}.H = zeros(size(H));
-  end
-
-  #make sure shiftSeed is flat
-  if(size(shiftSeed,2) ~= s)
-    shiftSeed = shiftSeed';
-    if(size(shiftSeed,2) ~= s)
-      error("one dimension of shiftSeed should be number of shifts");
-    end
   end
 
   if(toprt)
@@ -99,24 +107,27 @@ function [H, shiftDerivs, INFO] = trainBust(H, Shifts, shiftSeed, toplt = false,
         #calculate necessary polynomial bits
         polyH = eye(bsize);
         for j=1:s
-          dots{i}.polyH = zeros(bsize);
+          dots{j}.polyH = zeros(bsize);
         end
         #explicitly form the polynomial of shifts to shove in.
         #Note that it should be 1:bsize-1 to account for fill in
         for i=1:bsize-1
-          polyH *= H(1:bsize,1:bsize) - Shifts(1)*eye(bsize);
           for j=1:s
-          dots{i}.polyH = dots{i}.polyH * ...
+          dots{j}.polyH = dots{j}.polyH * ...
            ( H(1:bsize,1:bsize) - Shifts(1)*eye(bsize) ) + ...
            polyH * ...
-           ( dots{i}.H(1:bsize,1:bsize) - dots{i}.seed(1)*eye(bsize) );
+           ( (dots{j}.H)(1:bsize,1:bsize) - (dots{j}.seed)(1)*eye(bsize) );
+          end
+          polyH *= H(1:bsize,1:bsize) - Shifts(1)*eye(bsize);
+          for j=1:s
+            (dots{j}.seed)(1) = [];
           end
           Shifts(1) = [];
-          for j=1:s
-            dots{i}.seed(end) = [];
-          end
         endfor
 
+        for j=1:s
+          dots{j}.v = (dots{j}.polyH)(:,1);
+        end
         #create house vector
         [H, dots] = hhStepR(H,1,bsize,dots,sym,polyH(:,1));
         tstIdx = [tstIdx 1];#add this to index (shift) table
@@ -145,23 +156,27 @@ function [H, shiftDerivs, INFO] = trainBust(H, Shifts, shiftSeed, toplt = false,
         #calculate necessary polynomial bits
         polyH = eye(bsize);
         for j=1:s
-          dots{i}.polyH = zeros(bsize);
+          dots{j}.polyH = zeros(bsize);
         end
         #explicitly form the polynomial of shifts to shove in.
         #Note that it should be 1:bsize-1 to account for fill in
         for i=1:bsize-1
-          polyH *= H(n-bsize+1:n,n-bsize+1:n) - Shifts(end)*eye(bsize);
           for j=1:s
-            dots{i}.polyH = dots{i}.polyH*...
+            dots{j}.polyH = dots{j}.polyH*...
               (H(n-bsize+1:n,n-bsize+1:n) - Shifts(end)*eye(bsize)) + ...
               polyH*...
-              (dots{i}.H(n-bsize+1:n,n-bsize+1:n) - dots{i}.seed(end)*eye(bsize));
+              ((dots{j}.H)(n-bsize+1:n,n-bsize+1:n) - (dots{j}.seed)(end)*eye(bsize));
+          end
+          polyH *= H(n-bsize+1:n,n-bsize+1:n) - Shifts(end)*eye(bsize);
+          for j=1:s
+            (dots{j}.seed)(end) = []; 
           end
           Shifts(end) = [];
-          for j=1:s
-            dots{i}.seed(end) = []; 
-          end
         endfor
+        
+        for j=1:s
+          dots{j}.v = (dots{j}.polyH)(end,:);
+        end
         
         [H, dots] = hhStepB(H,0,bsize-1,dots,sym,polyH(end,:));
         #create house vector
@@ -205,12 +220,14 @@ function [H, shiftDerivs, INFO] = trainBust(H, Shifts, shiftSeed, toplt = false,
   
   #actually extract the appropriate spikes and their shifts
   shiftDerivs = [];
-  if(middle == 'm')
-    #TODO
-  elseif(middle == 'b')
-    #TODO
-  elseif(middle == 't')
-    #TODO
+  for i=1:s
+    if(middle == 'm')
+      shiftDerivs(i,:) = [ (dots{i}.H)(spSt:spEnd,spSt-1)' (dots{i}.H)(spEnd+1,spSt:spEnd) ]; 
+    elseif(middle == 'b')
+      shiftDerivs(i,:) = [ (dots{i}.H)(spSt:spEnd,spSt-1)' ];
+    elseif(middle == 't')
+      shiftDerivs(i,:) = [ (dots{i}.H)(spEnd+1,spSt:spEnd) ];
+    end
   end
 
 
@@ -258,35 +275,45 @@ function [H, dots] = hhStepR(H,stIdx, eIdx, dots,sym,v=[])
 
   #create house vector
   if(length(v) ~= eIdx - stIdx + 1)#if a vector is not provided
-    v = H(stIdx:eIdx, stIdx-1);
     for i=1:s
-      dots{i}.v = dots{i}.H(stIdx:eIdx, stIdx-1);
+      dots{i}.v = (dots{i}.H)(stIdx:eIdx, stIdx-1);
     end
+    v = H(stIdx:eIdx, stIdx-1);
+  end
+  for i=1:s
+    (dots{i}.v)(1) += sgn(v(1))*v'*dots{i}.v / sqrt(v'*v);
   end
   v(1) += sgn(v(1))*sqrt(v'*v);
-  for i=1:s
-    dots{i}.v(1) += sgn(v(1))*v'*dots{i}.v / sqrt(v'*v);
-  end
-  v /= sqrt(v'*v);#normalize house vector
   for i=1:s
     dots{i}.v -= (v'*dots{i}.v) * v / (v'*v);
     dots{i}.v /= sqrt(v'*v);
   end
+  v /= sqrt(v'*v);#normalize house vector
 
   #apply householder transformation to the right bits
-  H(stIdx:eIdx,:) -= v*((2*v')*H(stIdx:eIdx,:));
-  for i=1:s
-    dots{i}.H(stIdx:eIdx,:) -= dots{i}.v*((2*v')*H(stIdx:eIdx,:));
-    dots{i}.H(stIdx:eIdx,:) -= v*((2*dots{i}.v')*H(stIdx:eIdx,:));
-    dots{i}.H(stIdx:eIdx,:) -= v*((2*v')*dots{i}.H(stIdx:eIdx,:));
-  end
   maxEff = min(length(H),eIdx + 1);
-  H(1:maxEff,stIdx:eIdx) -= (H(1:maxEff,stIdx:eIdx)*(2*v))*v';
-  for i=1:lenth(dots)
-    dots{i}.H(1:maxEff,stIdx:eIdx) -= (dots{i}.H(1:maxEff,stIdx:eIdx)*(2*v))*v';
-    dots{i}.H(1:maxEff,stIdx:eIdx) -= (H(1:maxEff,stIdx:eIdx)*(2*dots{i}.v))*v';
-    dots{i}.H(1:maxEff,stIdx:eIdx) -= (H(1:maxEff,stIdx:eIdx)*(2*v))*dots{i}.v';
+  for i=1:s
+    #This looks kinda funny for the following reasons
+    #1) the 2 steps left and right multiplying by 2vv' is really
+    #performing (I-2vv')H(I-2vv').
+    #When you expand this out you get the following:
+
+    #The next 3 can come in any order
+    (dots{i}.H)(stIdx:eIdx,:) -= dots{i}.v*((2*v')*H(stIdx:eIdx,:));
+    (dots{i}.H)(stIdx:eIdx,:) -= v*((2*dots{i}.v')*H(stIdx:eIdx,:));
+    (dots{i}.H)(stIdx:eIdx,:) -= v*((2*v')*(dots{i}.H)(stIdx:eIdx,:));
+
+    #This one MUST come next
+    (dots{i}.H)(1:maxEff,stIdx:eIdx) -= ((dots{i}.H)(1:maxEff,stIdx:eIdx)*(2*v))*v';
+
+    #The next 4 can come in any order
+    (dots{i}.H)(1:maxEff,stIdx:eIdx) -= (H(1:maxEff,stIdx:eIdx)*(2*dots{i}.v))*v';
+    (dots{i}.H)(1:maxEff,stIdx:eIdx) -= (H(1:maxEff,stIdx:eIdx)*(2*v))*dots{i}.v';
+    (dots{i}.H)(1:maxEff,stIdx:eIdx) += v*(((4*v')*(H(1:maxEff,stIdx:eIdx)*dots{i}.v)).v');
+    (dots{i}.H)(1:maxEff,stIdx:eIdx) += v*(((4*v')*(H(1:maxEff,stIdx:eIdx)*v))*dots{i}.v');
   end
+  H(stIdx:eIdx,:) -= v*((2*v')*H(stIdx:eIdx,:));
+  H(1:maxEff,stIdx:eIdx) -= (H(1:maxEff,stIdx:eIdx)*(2*v))*v';
   if(stIdx > 1)
     H(stIdx+1:maxEff,stIdx-1) = 0;#zeros everything out for exactness
     if(sym)#if symmetric
@@ -294,9 +321,9 @@ function [H, dots] = hhStepR(H,stIdx, eIdx, dots,sym,v=[])
     end
 
     for i=1:s
-      dots{i}.H(stIdx+1:maxEff,stIdx-1) = 0;#zeros everything out for exactness
+      (dots{i}.H)(stIdx+1:maxEff,stIdx-1) = 0;#zeros everything out for exactness
       if(sym)#if symmetric
-        dots{i}.H(stIdx-1,stIdx+1:maxEff) = 0;#zeros everything out for exactness
+        (dots{i}.H)(stIdx-1,stIdx+1:maxEff) = 0;#zeros everything out for exactness
       end
     end
   end
@@ -309,35 +336,45 @@ function [H, dots] = hhStepB(H,stIdx, eIdx,dots,sym,v=[])
   
   #create house vector
   if(length(v) ~= eIdx - stIdx + 1)#if a vector is not provided
-    v = H(n - stIdx + 1, n - eIdx:n - stIdx);
     for i=1:s
-      dots{i}.v = dots{i}.H(n - stIdx + 1, n - eIdx:n - stIdx);
+      dots{i}.v = (dots{i}.H)(n - stIdx + 1, n - eIdx:n - stIdx);
     end
+    v = H(n - stIdx + 1, n - eIdx:n - stIdx);
+  end
+  for i=1:s
+    (dots{i}.v)(end) += sgn(v(end))*dots{i}.v*v'/sqrt(v*v');
   end
   v(end) += sgn(v(end))*sqrt(v*v');
-  for i=1:s
-    dots{i}.v(end) += sgn(v(end))*dots{i}.v*v'/sqrt(v*v');
-  end
-  v /= sqrt(v*v');#normalize house vector
   for i=1:s
     dots{i}.v -= (dots{i}.v*v') * v/(v*v');
     dots{i}.v /= sqrt(v*v');
   end
+  v /= sqrt(v*v');#normalize house vector
   
   #apply householder transformation to the right bits
   minEff = max(1,n - eIdx - 1);
+  for i=1:s
+    #This looks kinda funny for the following reasons
+    #1) the 2 steps left and right multiplying by 2vv' is really
+    #performing (I-2vv')H(I-2vv').
+    #When you expand this out you get the following:
+
+    #The next 3 can come in any order
+    (dots{i}.H)(n - eIdx:n - stIdx, minEff:n) -= dots{i}.v'*((2*v)*H(n - eIdx:n - stIdx,minEff:n));
+    (dots{i}.H)(n - eIdx:n - stIdx, minEff:n) -= v'*((2*dots{i}.v)*H(n - eIdx:n - stIdx,minEff:n));
+    (dots{i}.H)(n - eIdx:n - stIdx, minEff:n) -= v'*((2*v)*(dots{i}.H)(n - eIdx:n - stIdx,minEff:n));
+    
+    #This one MUST come next
+    (dots{i}.H)(:,n - eIdx:n - stIdx) -= ((dots{i}.H)(:,n - eIdx:n - stIdx)*(2*v'))*v;
+    
+    #The next 4 can come in any order
+    (dots{i}.H)(:,n - eIdx:n - stIdx) -= (H(:,n - eIdx:n - stIdx)*(2*dots{i}.v'))*v;
+    (dots{i}.H)(:,n - eIdx:n - stIdx) -= (H(:,n - eIdx:n - stIdx)*(2*v'))*dots{i}.v;
+    (dots{i}.H)(:,n - eIdx:n - stIdx) -= v'*((4*v)*(H(:,n - eIdx:n - stIdx)*(dots{i}.v')))*v;
+    (dots{i}.H)(:,n - eIdx:n - stIdx) -= v'*((4*v)*(H(:,n - eIdx:n - stIdx)*(v')))*dots{i}.v;
+  end
   H(n - eIdx:n - stIdx, minEff:n) -= v'*((2*v)*H(n - eIdx:n - stIdx,minEff:n));
-  for i=1:s
-    dots{i}.H(n - eIdx:n - stIdx, minEff:n) -= dots{i}.v'*((2*v)*H(n - eIdx:n - stIdx,minEff:n));
-    dots{i}.H(n - eIdx:n - stIdx, minEff:n) -= v'*((2*dots{i}.v)*H(n - eIdx:n - stIdx,minEff:n));
-    dots{i}.H(n - eIdx:n - stIdx, minEff:n) -= v'*((2*v)*dots{i}.H(n - eIdx:n - stIdx,minEff:n));
-  end
   H(:,n - eIdx:n - stIdx) -= (H(:,n - eIdx:n - stIdx)*(2*v'))*v;
-  for i=1:s
-    dots{i}.H(:,n - eIdx:n - stIdx) -= (dots{i}.H(:,n - eIdx:n - stIdx)*(2*v'))*v;
-    dots{i}.H(:,n - eIdx:n - stIdx) -= (H(:,n - eIdx:n - stIdx)*(2*dots{i}.v'))*v;
-    dots{i}.H(:,n - eIdx:n - stIdx) -= (H(:,n - eIdx:n - stIdx)*(2*v'))*dots{i}.v;
-  end
   if(stIdx > 0)
     H(n - stIdx + 1,minEff: n - stIdx-1) = 0;#zeros everything out for exactness
     if(sym)#if symmetric
@@ -345,9 +382,9 @@ function [H, dots] = hhStepB(H,stIdx, eIdx,dots,sym,v=[])
     end
 
     for i=1:s
-      dots{i}.H(n - stIdx + 1,minEff: n - stIdx-1) = 0;#zeros everything out for exactness
+      (dots{i}.H)(n - stIdx + 1,minEff: n - stIdx-1) = 0;#zeros everything out for exactness
       if(sym)#if symmetric
-        dots{i}.H(minEff: n - stIdx-1,n - stIdx + 1) = 0;#zeros everything out for exactness
+        (dots{i}.H)(minEff: n - stIdx-1,n - stIdx + 1) = 0;#zeros everything out for exactness
       end
     end
   end
@@ -363,21 +400,21 @@ function [H,dots,INFO] = schurComp(H,dots,spSt,spEnd,INFO,_RELTOL)
   #actually perform the schur decomposiotn
   [spRot, H(spSt:spEnd,spSt:spEnd)] = schur(H(spSt:spEnd,spSt:spEnd));
   for i=1:s
-    [dots{i}.spRot, dots{i}.H(spSt:spEnd,spSt:spEnd)] = ...
-      schurAd(dots{i}.H(spSt:spEnd,spSt:spEnd),spRot, H(spSt:spEnd,spSt:spEnd));
+    [dots{i}.spRot, (dots{i}.H)(spSt:spEnd,spSt:spEnd)] = ...
+      schurAd((dots{i}.H)(spSt:spEnd,spSt:spEnd),spRot, H(spSt:spEnd,spSt:spEnd));
   end
   if(spSt > 1)%apply it to the left/top portion
     H(1:spSt-1,spSt:spEnd) = H(1:spSt-1,spSt:spEnd) * spRot;
     for i=1:s
-      dots{i}.H(1:spSt-1,spSt:spEnd) = ...
-        dots{i}.H(1:spSt-1,spSt:spEnd) * spRot + H(1:spSt-1,spSt:spEnd) * dots{i}.spRot;
+      (dots{i}.H)(1:spSt-1,spSt:spEnd) = ...
+        (dots{i}.H)(1:spSt-1,spSt:spEnd) * spRot + H(1:spSt-1,spSt:spEnd) * dots{i}.spRot;
     end
   end
   if(spEnd < n)%apply it to the right/bottom portion
     H(spSt:spEnd,spEnd+1:n) = spRot'*H(spSt:spEnd,spEnd+1:n);
     for i=1:s
-      dots{i}.H(spSt:spEnd,spEnd+1:n) = ...
-        dots{i}.spRot'*H(spSt:spEnd,spEnd+1:n) + spRot'*dots{i}.H(spSt:spEnd,spEnd+1:n);
+      (dots{i}.H)(spSt:spEnd,spEnd+1:n) = ...
+        dots{i}.spRot'*H(spSt:spEnd,spEnd+1:n) + spRot'*(dots{i}.H)(spSt:spEnd,spEnd+1:n);
     end
   end
 
@@ -386,7 +423,7 @@ function [H,dots,INFO] = schurComp(H,dots,spSt,spEnd,INFO,_RELTOL)
   hSpike = spRot(end,:);
   for i=1:s
     dots{i}.vSpike = dots{i}.spRot'(:,1);
-    dots{i}.hSpike = dots{i}.spRot(end,:);
+    dots{i}.hSpike = (dots{i}.spRot)(end,:);
   end
   #count hard zeros
   vsz = abs(vSpike) < _RELTOL;
@@ -401,8 +438,8 @@ function [H,dots,INFO] = schurComp(H,dots,spSt,spEnd,INFO,_RELTOL)
   if(spEnd < n)%apply it to the right/bottom portion
     H(spEnd+1,spSt:spEnd) = H(spEnd+1,spEnd) * hSpike;
     for i=1:s
-      dots{i}.H(spEnd+1,spSt:spEnd) = ...
-        dots{i}.H(spEnd+1,spEnd) * hSpike + H(spEnd+1,spEnd) * dots{i}.hSpike;;
+      (dots{i}.H)(spEnd+1,spSt:spEnd) = ...
+        (dots{i}.H)(spEnd+1,spEnd) * hSpike + H(spEnd+1,spEnd) * dots{i}.hSpike;;
     end
     INFO.nz += sum(hsz);
     INFO.hspIdx = spEnd + 1;
@@ -410,8 +447,8 @@ function [H,dots,INFO] = schurComp(H,dots,spSt,spEnd,INFO,_RELTOL)
   if(spSt > 1)%apply it to the left/top portion
     H(spSt:spEnd,spSt-1) = H(spSt,spSt-1) * vSpike;
     for i=1:s
-      dots{i}.H(spSt:spEnd,spSt-1) = ...
-        dots{i}.H(spSt,spSt-1) * vSpike + H(spSt,spSt-1) * dots{i}.vSpike;
+      (dots{i}.H)(spSt:spEnd,spSt-1) = ...
+        (dots{i}.H)(spSt,spSt-1) * vSpike + H(spSt,spSt-1) * dots{i}.vSpike;
     end
     INFO.nz += sum(vsz);
     INFO.vspIdx = spSt - 1;
