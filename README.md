@@ -25,3 +25,7 @@ thorough explanation of their contents
 
   contains source code.
   Most of this will be \.m files for Octave
+
+* notes
+  
+  contains report/notes on implementation and considerations

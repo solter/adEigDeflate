@@ -33,7 +33,7 @@
 ##    hspIdx -> horizontal spike's row index (only for middle)
 ##    nz -> count of zeros in spikes
 ## @end deftypefn
-function [H, shiftDerivs, spikes, INFO] = trainBust(H, Shifts, shiftSeed, toplt = false, toprt = false, middle = 'm')
+function [H, shiftDerivs, spikes, INFO] = trainBust(H, Shifts, shiftSeed, toplt = false, toprt = false, middle = 'm', reorder = false)
 
   #TODO: actually deflate matrix, so far only finds deflation points while pushing bulges
   #need to do deflation logic for spike
@@ -212,7 +212,7 @@ function [H, shiftDerivs, spikes, INFO] = trainBust(H, Shifts, shiftSeed, toplt 
   endif
    
   INFO.HPreSchur = H;
-  [H, dots, INFO] = schurComp(H, dots, spSt, spEnd, INFO, _RELTOL);
+  [H, dots, INFO] = schurComp(H, dots, spSt, spEnd, INFO, _RELTOL, );
   
   #actually extract the appropriate spikes and their shifts
   shiftDerivs = [];
@@ -386,6 +386,10 @@ function [H,dots,INFO] = schurComp(H,dots,spSt,spEnd,INFO,_RELTOL)
 
   #actually perform the schur decomposiotn
   [spRot, H(spSt:spEnd,spSt:spEnd)] = schur(H(spSt:spEnd,spSt:spEnd));
+
+  %TODO: permute the schur decomposition as described in adEffect
+
+
   for i=1:s
     [dots{i}.spRot, (dots{i}.H)(spSt:spEnd,spSt:spEnd)] = ...
       schurAd((dots{i}.H)(spSt:spEnd,spSt:spEnd),spRot, H(spSt:spEnd,spSt:spEnd));

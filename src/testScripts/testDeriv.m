@@ -92,7 +92,7 @@ if(exist('tTrain','var') && tTrain == true)
   oddErrApp = .5*(sort(abs(sp1)) - sort(abs(sp2)))/ep;
   errOdd = sort(oddErrApp) - sort(deriv);
 
-  printf('Ther erros were as follows:\nRHS (mean) = %f\nerrC (mean) = %f\nerrC (mean of log) = %f\nMax |errC| = %f\nsorted err max < %f\n',...
+  printf('Ther errors were as follows:\nRHS (mean) = %f\nerrC (mean) = %f\nerrC (mean of log) = %f\nMax |errC| = %f\nsorted err max < %f\n',...
   norm(errR,1)/length(deriv), norm(errC,1)/length(deriv),...
   sum(log10(abs(errC) + eps/2))/length(errC), max(abs(errC)), max(abs(errOdd))...
   );
@@ -141,5 +141,33 @@ if(exist('ltTrain','var') && ltTrain == true)
   figure()
   hist(V)
 
+end
+
+#Tests analogous to tSchur2 which are included in adEffect.tex
+if(exist('tradTrain','var') && tradTrain == true)
+  #to generate the following without actually performing the
+  #Schur decomposition step, go into trainBust and comment out the
+  #line calling schurComp, then run this (figure 1a in adEffect)
+  hessen(randn(100)); 
+  s = randn(10,1); 
+  d = rand(10,1); 
+  d /= norm(d);
+  [B,~,~,INFO] = trainBust(A,s,d);
+  ers = []; 
+  for i=1:length(x); 
+    [B2,~,~,~] = trainBust(A,s+x(i)*d,d);
+    ers = [ers, norm(B + x(i)*INFO.dots{1}.H - B2,'fro')]; 
+  end
+  figure();
+  loglog(x,ers,'-;;','linewidth',4)
+  set(gca(),'fontsize',16);
+  xlabel('\epsilon','fontsize',20);
+  #note: epsilon appears greek in windows, but prints to png as english word
+  #print('notes/name.png','-dpng')
+
+  #for figure 2, run this a couple of times to find satisfactory
+  #results, turn on hold to make both appear on same plot
+  #It took me 3 tries to get those two matrices. Other attemps yielded
+  #results similar to one or the other of them.
 
 end
