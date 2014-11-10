@@ -29,6 +29,9 @@ SRSchur.m:
   Written by Jan Brandts (see Numerical Linear Algebra with Applications 9(3):249-261 (2002))
   Available at http://m2matlabdb.ma.tum.de/download.jsp?MC_ID=3&MP_ID=119
 
+swapSchur.m:
+  SRSchur.m, except sorts to find good deflations rather than specific eigenvalue ordering
+
 bottom/adEvals.m (T):
   Calculates eigenvalues using aggresive early deflation.
   NOTE - this doesn't perform as advertised, currently has

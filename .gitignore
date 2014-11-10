@@ -3,4 +3,5 @@ octave-core
 *.gif
 *.log
 *.aux
+.*.swp
 ADTalkFeb4.nb

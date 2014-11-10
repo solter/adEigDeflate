@@ -25,7 +25,10 @@
 ##
 ##Outputs:@*
 ##  @var{H} - The matrix A after running bulge trains into it's center and
-##    creating the spikes@*
+##    creating the spikes.
+##    If matrix was split at middle, this will be a cell array with 2 matrices
+#     which were split from the split matrix H.@*
+##  @var{egs} - eigenvalues which have been deflated out of matrix
 ##  @var{shiftDerivs} - The derivative of the spikes w.r.t. the shifts in the directions
 ##    specified by @var{shiftSeed}. 
 ##  @var{INFO} - a structure with INFOrmation. Fields:
@@ -33,9 +36,8 @@
 ##    hspIdx -> horizontal spike's row index (only for middle)
 ##    nz -> count of zeros in spikes
 ## @end deftypefn
-function [H, shiftDerivs, spikes, INFO] = trainBust(H, Shifts, shiftSeed, toplt = false, toprt = false, middle = 'm', reorder = false)
-  
-  egA = sort(eig(H));
+function [H, egs, shiftDerivs, spikes, INFO] = trainBust(H, Shifts, shiftSeed, toplt = false, toprt = false, middle = 'm', reorder = false)
+  A = H;  
   #TODO: actually deflate matrix, so far only finds deflation points while pushing bulges
   #need to do deflation logic for spike
 
@@ -192,11 +194,6 @@ function [H, shiftDerivs, spikes, INFO] = trainBust(H, Shifts, shiftSeed, toplt 
 
     if(toplt)
       pltMat(H);
-      err = norm(egA - sort(eig(H)));
-      title(sprintf('err = %f',err))
-      if(err > 1e-2)
-        error(sprintf('lost accuracy at %d',tendIdx + bendIdx))
-      end
       if(toprt)
         print(sprintf('../impStepPlts/impstep%03d.png',++pltNum));
       else
@@ -229,23 +226,7 @@ function [H, shiftDerivs, spikes, INFO] = trainBust(H, Shifts, shiftSeed, toplt 
   #actually extract the appropriate spikes and their shifts
   shiftDerivs = [];
   if(middle == 'm')
-    for i=1:s
-      shiftDerivs(i,:) = [ (dots{i}.H)(spSt:spEnd,spSt-1)' (dots{i}.H)(spEnd+1,spSt:spEnd) ]; 
-    end
-    spikes = [ H(spSt:spEnd,spSt-1)' H(spEnd+1,spSt:spEnd) ]; 
-  elseif(middle == 'b')
-    for i=1:s
-      shiftDerivs(i,:) = [ (dots{i}.H)(spSt:spEnd,spSt-1)' ];
-    end
-    spikes = [ H(spSt:spEnd,spSt-1)' ];
-  elseif(middle == 't')
-    for i=1:s
-      shiftDerivs(i,:) = [ (dots{i}.H)(spEnd+1,spSt:spEnd) ];
-    end
-    spikes = [ H(spEnd+1,spSt:spEnd) ];
-  end
-
-  INFO.dots = dots;
+    INFO.dots = dots;
 
   if(toplt)
     pltMat(H);
@@ -255,6 +236,48 @@ function [H, shiftDerivs, spikes, INFO] = trainBust(H, Shifts, shiftSeed, toplt 
       pause(_PAUSELEN);
     endif
   endif
+
+  #Clean up back to hessenberg form
+  if(middle = 'm')
+    #if enough zeros in spikes, collapse to hessenberg and reset derivatives to zero
+    if(INFO.nz > spEnd-spSt + 1)#if more than half of spike values are zero
+      #collapse to hessenberg form
+
+      #split matrix
+
+      #spike matrix and hope for deflation????
+
+    else 
+      #if not enough zeros in spikes, record them and their derivates
+      for i=1:s
+        shiftDerivs(i,:) = [ (dots{i}.H)(spSt:spEnd,spSt-1)' (dots{i}.H)(spEnd+1,spSt:spEnd) ]; 
+      end
+      spikes = [ H(spSt:spEnd,spSt-1)' H(spEnd+1,spSt:spEnd) ]; 
+    end
+  else#if pushed to top or bottom
+
+    while(INFO.nz > 0)#if zeros in spikes
+      #reorder and deflate
+
+      #spike out again
+    end
+
+    #record spikes and their derivates
+    if(middle == 'b')
+      for i=1:s
+        shiftDerivs(i,:) = [ (dots{i}.H)(spSt:spEnd,spSt-1)' ];
+      end
+      spikes = [ H(spSt:spEnd,spSt-1)' ];
+    elseif(middle == 't')
+      for i=1:s
+        shiftDerivs(i,:) = [ (dots{i}.H)(spEnd+1,spSt:spEnd) ];
+      end
+      spikes = [ H(spEnd+1,spSt:spEnd) ];
+    end
+
+    #collapse to hessenberg
+    
+  end
 
   if(toprt)
     close all;
@@ -341,7 +364,7 @@ end
 function [H, dots] = hhStepB(H,stIdx, eIdx,dots,sym,v=[])
   n = length(H);
   s = length(dots);
-  
+ 
   #create house vector
   if(length(v) ~= eIdx - stIdx + 1)#if a vector is not provided
     for i=1:s
@@ -399,9 +422,8 @@ function [H,dots,INFO] = schurComp(H,dots,spSt,spEnd,INFO,_RELTOL)
   #actually perform the schur decomposion (AU = UT)
   [spRot, H(spSt:spEnd,spSt:spEnd)] = schur(H(spSt:spEnd,spSt:spEnd));
 
-  #order the decomposition by eval magnitude (largest to smallest)
-  #Is this necesary?????
-  [Q, T, ap] = SRSchur(spRot, H(spSt:spEnd,spSt:spEnd), inf, 0);
+  #sort the decomposition to achieve good spikes
+  [Q, T, ap] = swapSchur(spRot, H(spSt:spEnd,spSt:spEnd), middle, _RELTOL);
 
   if(max(ap) > 1)
     warning('schur reordering may have performed badly,so did not reorder')

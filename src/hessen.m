@@ -15,6 +15,9 @@ function [H] = hessen(A, toplt = false, top = 'b')
       %create house vector
       v = H(i+1:n, i);
       v(1) += sgn(v(1))*sqrt(v'*v);
+      if(v'*v == 0)
+        continue;
+      end
       v /= sqrt(v'*v);%normalize house vector
       
       %apply householder transformation to the right bits
