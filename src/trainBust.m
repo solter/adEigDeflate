@@ -34,7 +34,8 @@
 ##    nz -> count of zeros in spikes
 ## @end deftypefn
 function [H, shiftDerivs, spikes, INFO] = trainBust(H, Shifts, shiftSeed, toplt = false, toprt = false, middle = 'm', reorder = false)
-
+  
+  egA = sort(eig(H));
   #TODO: actually deflate matrix, so far only finds deflation points while pushing bulges
   #need to do deflation logic for spike
 
@@ -46,6 +47,12 @@ function [H, shiftDerivs, spikes, INFO] = trainBust(H, Shifts, shiftSeed, toplt 
   toprt = toprt && toplt;#must be plotting to print
   INFO = struct();
   sym = norm(H - H','inf') < sqrt(eps);
+  %Make sure the shifts are real.
+  %Complex shifts broke this...
+  %in that shoving them in the matrix was no longer similar to the initial matrix
+  Shifts = real(Shifts);
+  shiftSeed = real(shiftSeed);
+
   #the structure to hold all the derivative information
 
   #make sure shiftSeed is flat
@@ -185,6 +192,11 @@ function [H, shiftDerivs, spikes, INFO] = trainBust(H, Shifts, shiftSeed, toplt 
 
     if(toplt)
       pltMat(H);
+      err = norm(egA - sort(eig(H)));
+      title(sprintf('err = %f',err))
+      if(err > 1e-2)
+        error(sprintf('lost accuracy at %d',tendIdx + bendIdx))
+      end
       if(toprt)
         print(sprintf('../impStepPlts/impstep%03d.png',++pltNum));
       else
@@ -212,7 +224,7 @@ function [H, shiftDerivs, spikes, INFO] = trainBust(H, Shifts, shiftSeed, toplt 
   endif
    
   INFO.HPreSchur = H;
-  [H, dots, INFO] = schurComp(H, dots, spSt, spEnd, INFO, _RELTOL, );
+  [H, dots, INFO] = schurComp(H, dots, spSt, spEnd, INFO, _RELTOL);
   
   #actually extract the appropriate spikes and their shifts
   shiftDerivs = [];
@@ -384,11 +396,19 @@ function [H,dots,INFO] = schurComp(H,dots,spSt,spEnd,INFO,_RELTOL)
   s = length(dots);
   INFO.nz = 0;
 
-  #actually perform the schur decomposiotn
+  #actually perform the schur decomposion (AU = UT)
   [spRot, H(spSt:spEnd,spSt:spEnd)] = schur(H(spSt:spEnd,spSt:spEnd));
 
-  %TODO: permute the schur decomposition as described in adEffect
+  #order the decomposition by eval magnitude (largest to smallest)
+  #Is this necesary?????
+  [Q, T, ap] = SRSchur(spRot, H(spSt:spEnd,spSt:spEnd), inf, 0);
 
+  if(max(ap) > 1)
+    warning('schur reordering may have performed badly,so did not reorder')
+  else
+    spRot = Q;
+    H(spSt:spEnd,spSt:spEnd) = T;
+  end
 
   for i=1:s
     [dots{i}.spRot, (dots{i}.H)(spSt:spEnd,spSt:spEnd)] = ...

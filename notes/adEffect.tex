@@ -135,51 +135,60 @@ The matrices used 10 shifts and were size 100.
 \end{figure}
 
 Clearly some matrices break the automatic differentiation as applied/interpreted.
-This is due to the pivoting (which can be highly sensitive to perturbations) 
-during the Schur decomposition, and can be alleviated as follows.
+Thid is due to the arbitrary ordering of the eigenvalues which emerge
+in the schur decomposition (which can be highly sensitive to perturbations).
+To avoid this arbitrariness, the Schur decomposition was sorted using
+code published by Jan Brands \cite{srschur}.
 
-Given a Schur Decomposition $AQ = QT$, let $P_i$ be signed permutation
-matrices.
-Then 
-\[
-  (P_r'AP_r)(P_r'QP_c) = (P_r'QP_c)(P_cTP_c)
-\], 
-\footnote{Note that this also applies to arbitrary rotations.
-We will only concern ourselves with signed permutations, as algorithms to compute
-the Schur decomposition often rely upon pivoting, but non-pivot rotations are boiled into $Q$}
-which amounts
-to pivoting on $Q$.
-Since the spikes are generated only by the first and last rows of $Q$,
-this pivoting will effect which values appear in in the spiked matrix.
-Thus the poor performance observed in figure \ref{fig:vanErr} can be attributed
-towards different pivoting positions.
+%COOL IDEA -> Won't work since must permute entire matrix,
+%and the row that gets pulled out will always correspond to the top
+%and bottom rows of Q BEFORE permutation..... Damn
 
-To remedy this, we can apply pivoting after the schur decomposition to
-recover a uniform pivoting scheme across different choices of shifts.
-Since we are interested in stabilizing $Q$, we can view
-$P_c$ as permuting the columns of $Q$, and $P_r$ as permuting the rows of $Q$.
+%This is due to the pivoting 
+%during the Schur decomposition, and can be alleviated as follows.
+%
+%Given a Schur Decomposition $AQ = QT$, let $P$ be a signed permutation
+%matrix.
+%Then 
+%\[
+%%  (P_r'AP_r)(P_r'QP_c) = (P_r'QP_c)(P_cTP_c)
+%  A(QP) = (QP)(P'TP)
+%\], 
+%\footnote{Note that this also applies to arbitrary rotations.
+%We will only concern ourselves with signed permutations, as algorithms to compute
+%the Schur decomposition often rely upon pivoting, but non-pivot rotations are boiled into $Q$}
+%which amounts to pivoting on $Q$.
+%Since the spikes are generated only by the first and last rows of $Q$,
+%this pivoting will effect which values appear in in the spiked matrix.
+%Thus the poor performance observed in figure \ref{fig:vanErr} can be attributed
+%toward
+%
+%To remedy this, we can apply pivoting after the schur decomposition to
+%recover a uniform pivoting scheme across different choices of shifts.
+%Note that we can view $P$ as permuting the columns of $Q$.
 
-Our desire is that most of the 'weight' along the spikes are in less than half
-the entries, which provides for deflation opportunities.
-Note that the spikes correspond to scaled versions of the top and bottom rows
-of $Q$.
-To find the rows of $Q$ which best achieve this, we can find
-the 2 rows with the smallest $L_1$ norm,
-\footnote{
-This can be seen by partitioning the row $Q_{i,:}$ into two parts,
-and considering it as a vector in $\mathbb{C}^2$.
-Then the $L_1$ norm is minimized across unit vectors with only 1 nonzero entry.}
-and rotate them to the top and bottom rows of $Q$.
-The rest of $P_r$ can be left as the identity since the non-spike rows are of no interest.
+%Our desire is that most of the 'weight' along the spikes are in less than half
+%the entries, which provides for deflation opportunities.
+%Note that the spikes correspond to scaled versions of the top and bottom rows
+%of $Q$.
+%To find the rows of $Q$ which best achieve this, we can find
+%the 2 rows with the smallest $L_1$ norm,
+%\footnote{
+%This can be seen by partitioning the row $Q_{i,:}$ into two parts,
+%and considering it as a vector in $\mathbb{C}^2$.
+%Then the $L_1$ norm is minimized across unit vectors with only 1 nonzero entry.}
+%and rotate them to the top and bottom rows of $Q$.
+%The rest of $P_r$ can be left as the identity since the non-spike rows are of no interest.
 
-For convenience, it would be nice if all the zeros are on the tips of the
-spikes rather than near the diagonal.
-Thus ideally all the zeros in the first row are in the last columns,
-and all the zeros in the last row are in the first columns.
-This can be achieved by having $P_c$ sort the columns in descending
-order by the metric $(|Q(n,i)| - |Q(1,i)|)$.
-Furthermore, to avoid sign changes, $P_c$ should also flip all the
-signs of the first row to positive.
+%For convenience, it would be nice if all the zeros are on the tips of the
+%spikes rather than near the diagonal.
+%Thus ideally all the zeros in the first row are in the last columns,
+%and all the zeros in the last row are in the first columns.
+%This can be achieved by having $P_c$ sort the columns in descending
+%order by the metric $(|Q(1,i)| - |Q(n,i)|)$.
+%Furthermore, to avoid sign changes, $P_c$ should also flip all the
+%signs of the first row to positive.
+%This provides the uniform pivoting stategy we were looking for.
 
 %The reason can be seen in the equation for $er_S$ as follows.
 %Automatic Differentiation was constructed to accurately represent how
@@ -245,5 +254,8 @@ signs of the first row to positive.
 %\end{figure}
 %
 %This distribution 
+
+\bibliographystyle{plain}
+\bibliography{biblio}
 
 \end{document}

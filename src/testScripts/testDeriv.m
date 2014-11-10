@@ -148,15 +148,19 @@ if(exist('tradTrain','var') && tradTrain == true)
   #to generate the following without actually performing the
   #Schur decomposition step, go into trainBust and comment out the
   #line calling schurComp, then run this (figure 1a in adEffect)
-  hessen(randn(100)); 
-  s = randn(10,1); 
-  d = rand(10,1); 
-  d /= norm(d);
+
+  if(~exist('newA','var') || newA == true)
+    A = hessen(randn(100)); 
+    s = randn(10,1); 
+    d = rand(10,1); 
+    d /= norm(d);
+  end
   [B,~,~,INFO] = trainBust(A,s,d);
-  ers = []; 
+  x = 10.^(-10:1/3:0);
+  ers = zeros(length(x),1);
   for i=1:length(x); 
-    [B2,~,~,~] = trainBust(A,s+x(i)*d,d);
-    ers = [ers, norm(B + x(i)*INFO.dots{1}.H - B2,'fro')]; 
+    [OUT{i},~,~,~] = trainBust(A,s+x(i)*d,[]);
+    ers(i) = [norm(B + x(i)*INFO.dots{1}.H - OUT{i},'fro')]; 
   end
   figure();
   loglog(x,ers,'-;;','linewidth',4)

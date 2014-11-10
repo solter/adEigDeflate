@@ -24,6 +24,11 @@ schurAd.m (W):
   Computes the derivative of both S and U from a Schur decomposition
   (A.U = U.S)
 
+SRSchur.m:
+  A function to reorder real schur decomposition.
+  Written by Jan Brandts (see Numerical Linear Algebra with Applications 9(3):249-261 (2002))
+  Available at http://m2matlabdb.ma.tum.de/download.jsp?MC_ID=3&MP_ID=119
+
 bottom/adEvals.m (T):
   Calculates eigenvalues using aggresive early deflation.
   NOTE - this doesn't perform as advertised, currently has
