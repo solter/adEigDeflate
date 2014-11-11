@@ -36,15 +36,12 @@
 ##    hspIdx -> horizontal spike's row index (only for middle)
 ##    nz -> count of zeros in spikes
 ## @end deftypefn
-function [H, egs, shiftDerivs, spikes, INFO] = trainBust(H, Shifts, shiftSeed, toplt = false, toprt = false, middle = 'm')
-  A = H;  
-  #TODO: actually deflate matrix, so far only finds deflation points while pushing bulges
-  #need to do deflation logic for spike
+function [H, egs, shiftDerivs, spikes, INFO] = trainBust(H, Shifts, shiftSeed, toplt = false, toprt = false, middle = 'm', toSpike = true)
 
   _PAUSELEN = 0.0;#pause time when playing real time
   _MAXBULGESIZE = 5;#maximum bulge size
   _EXTRASPIKE = 0;#floor(.5*length(Shifts));#extra size of spike beyond shifts
-  _RELTOL = 1e-6;
+  _RELTOL = sqrt(eps);
   n = length(H);#convenience shorthand
   toprt = toprt && toplt;#must be plotting to print
   INFO = struct();
@@ -54,9 +51,9 @@ function [H, egs, shiftDerivs, spikes, INFO] = trainBust(H, Shifts, shiftSeed, t
   %in that shoving them in the matrix was no longer similar to the initial matrix
   Shifts = real(Shifts);
   shiftSeed = real(shiftSeed);
+  if(middle == 'm'); toSpike = true; end
 
   #the structure to hold all the derivative information
-
   #make sure shiftSeed is flat
   if(~isempty(shiftSeed) && size(shiftSeed,2) ~= length(Shifts))
     shiftSeed = shiftSeed';
@@ -195,7 +192,7 @@ function [H, egs, shiftDerivs, spikes, INFO] = trainBust(H, Shifts, shiftSeed, t
     if(toplt)
       pltMat(H);
       if(toprt)
-        print(sprintf('../impStepPlts/impstep%03d.png',++pltNum));
+        print(sprintf('../impStepPlts/impstep%03d.png',++pltNum),'-dpng');
       else
         pause(_PAUSELEN);
       endif
@@ -219,62 +216,73 @@ function [H, egs, shiftDerivs, spikes, INFO] = trainBust(H, Shifts, shiftSeed, t
     spSt = 1;
     spEnd = n - bstIdx(end) + 1 + _EXTRASPIKE;#index of block
   endif
-   
-  INFO.HPreSchur = H;
-  [H, dots, INFO] = schurComp(H, dots, spSt, spEnd, INFO, _RELTOL);
   
-  if(toplt)
-    pltMat(H);
-    if(toprt)
-      print(sprintf('../impStepPlts/impstep%03d.png',++pltNum));
-    else
-      pause(_PAUSELEN);
+  if(toSpike)
+    INFO.HPreSchur = H;
+    [H, dots, INFO] = schurComp(H, dots, spSt, spEnd, INFO, _RELTOL);
+  
+    if(toplt)
+      pltMat(H);
+      if(toprt)
+        print(sprintf('../impStepPlts/impstep%03d.png',++pltNum),'-dpng');
+      else
+        pause(_PAUSELEN);
+      endif
     endif
-  endif
 
-  #Clean up back to hessenberg form
-  if(middle == 'm')
-    #if enough zeros in spikes tips, deflate
-    maxRow = max(find(H(:,spSt-1)));
-    #check if its a complex conjugate pair
-    if(abs(H(maxRow+1,maxRow)) > sqrt(eps))
-      maxRow += 1;%make sure R encompasses this
-    end
-    minCol = min(find(H(spEnd+1,:)));
-    #if it is splittable
-    if(maxRow < minCol)
-      #split
-      Htop = H(1:maxRow,1:maxRow);
-      Hbot = H(maxRow+1:end, maxRow+1:end);
-      for i=1:s
-        dots{i}.Htop = dots{i}.H(1:maxRow,1:maxRow);
-        dots{i}.Hbot = dots{i}.H(maxRow+1:end, maxRow+1:end);
+    #Clean up back to hessenberg form
+    if(middle == 'm')
+      #if enough zeros in spikes tips, deflate
+      maxRow = max(find(H(:,spSt-1)));
+      #check if its a complex conjugate pair
+      if(abs(H(maxRow+1,maxRow)) > sqrt(eps))
+        maxRow += 1;%make sure R encompasses this
       end
-      [Htop, dots, egTop] = cleanBot(Htop,dots,spSt-1,sym,toplt,toprt,INFO,_EXTRASPIKE,_RELTOL);
-      [Hbot, dots, egBot] = cleanTop(Hbot,dots,spEnd+1 - maxRow,sym,toplt,toprt,INFO,_EXTRASPIKE,_RELTOL);
-      #TODO: reorganize this information for use by end user
-    else
-      #if not enough zeros in spikes, record them and their derivates
-      for i=1:s
-        shiftDerivs(i,:) = [ (dots{i}.H)(spSt:spEnd,spSt-1)' (dots{i}.H)(spEnd+1,spSt:spEnd) ]; 
+      minCol = min(find(H(spEnd+1,:)));
+      #if it is splittable
+      if(maxRow < minCol)
+        #split
+        Htop = H(1:maxRow,1:maxRow);
+        Hbot = H(maxRow+1:end, maxRow+1:end);
+        for i=1:s
+          dots{i}.Htop = dots{i}.H(1:maxRow,1:maxRow);
+          dots{i}.Hbot = dots{i}.H(maxRow+1:end, maxRow+1:end);
+        end
+        [Htop, dots, egTop] = cleanBot(Htop,dots,spSt-1,sym,toplt,toprt,INFO,_EXTRASPIKE,_RELTOL);
+        [Hbot, dots, egBot] = cleanTop(Hbot,dots,spEnd+1 - maxRow,sym,toplt,toprt,INFO,_EXTRASPIKE,_RELTOL);
+        #TODO: reorganize this information for use by end user
+      else
+        #if not enough zeros in spikes, record them and their derivates
+        for i=1:s
+          shiftDerivs(i,:) = [ (dots{i}.H)(spSt:spEnd,spSt-1)' (dots{i}.H)(spEnd+1,spSt:spEnd) ]; 
+        end
+        spikes = [ H(spSt:spEnd,spSt-1)' H(spEnd+1,spSt:spEnd) ]; 
       end
-      spikes = [ H(spSt:spEnd,spSt-1)' H(spEnd+1,spSt:spEnd) ]; 
+    elseif(middle == 't')#if pushed to top 
+        #TODO: reorganize this information for use by end user
+      [Htop, dots, egTop] = cleanTop(H,dots,spEnd+1,sym,toplt,toprt,INFO,_EXTRASPIKE,_RELTOL);
+      for i=1:s
+        shiftDerivs(i,:) = [ (dots{i}.H)(spEnd+1,spSt:spEnd) ];
+      end
+      spikes = [ H(spEnd+1,spSt:spEnd) ];
+    elseif(middle == 'b') #if pushed to bottom
+        #TODO: reorganize this information for use by end user
+      [H, dots, spIdx, egs] = cleanBot(H,dots,spSt-1,sym,toplt,toprt,INFO,_EXTRASPIKE,_RELTOL);
+      for i=1:s
+        shiftDerivs(i,:) = [ (dots{i}.H)(spIdx + 1:end,spIdx)' ];
+      end
+      spikes = [ H(spIdx+1:end,spIdx)' ];
+      [H,dots] = finishBot(H,dots,spIdx,sym,toplt,toprt);
     end
-  elseif(middle == 't')#if pushed to top 
-      #TODO: reorganize this information for use by end user
-    [Htop, dots, egTop] = cleanTop(H,dots,spEnd+1,sym,toplt,toprt,INFO,_EXTRASPIKE,_RELTOL);
-    for i=1:s
-      shiftDerivs(i,:) = [ (dots{i}.H)(spEnd+1,spSt:spEnd) ];
+
+  else#not creating spikes, drive bulge off edge
+    if(middle == 't')
+      [H,dots] = finishTop(H,dots,n - bstIdx(end) + 1,sym,toplt,toprt);
+    elseif(middle == 'b')
+      [H,dots] = finishBot(H,dots,tstIdx(end),sym,toplt,toprt);
     end
-    spikes = [ H(spEnd+1,spSt:spEnd) ];
-  elseif(middle == 'b') #if pushed to bottom
-      #TODO: reorganize this information for use by end user
-    [Hbot, dots, egBot] = cleanBot(H,dots,spSt-1,sym,toplt,toprt,INFO,_EXTRASPIKE,_RELTOL);
-    for i=1:s
-      shiftDerivs(i,:) = [ (dots{i}.H)(spSt:spEnd,spSt-1)' ];
-    end
-    spikes = [ H(spSt:spEnd,spSt-1)' ];
   end
+  INFO.dots = dots;
 
   if(toprt)
     close all;
@@ -493,7 +501,7 @@ function [H,dots,INFO] = schurComp(H,dots,spSt,spEnd,INFO,_RELTOL)
 end
 
 #finishes sweep to the bottom of a matrix
-function [H, dots, eg] = cleanBot(H, dots, spIdx, sym, toplt, toprt,INFO, _EXTRASPIKE, _RELTOL)
+function [H, dots, spIdx, eg] = cleanBot(H, dots, spIdx, sym, toplt, toprt,INFO, _EXTRASPIKE, _RELTOL)
   s = length(dots);
   n = length(H);
   defIdx = max(find(H(:,spIdx)))+1;#topmost zero
@@ -539,28 +547,18 @@ function [H, dots, eg] = cleanBot(H, dots, spIdx, sym, toplt, toprt,INFO, _EXTRA
     end
   end
 
-  #reduce H to hessenberg form
-  n = length(H);
-  for toHess = spIdx+1:length(H)
-    [H, dots] = hhStepR(H,toHess,n,dots,sym);
-    if(toplt)
-      pltMat(H);
-      if(toprt)
-        print(sprintf('../impStepPlts/impstep%03d.png',++pltNum));
-      else
-        pause(_PAUSELEN);
-      endif
-    endif
-  end
 
   if(tryAgain)
+    [H, dots] = finishBot(H,dots,spIdx+1,sym,toplt,toprt);
     #respike
+    n = length(H);
     spSt = n - spLength;#spike will form 1 left of here
     spEnd = n;
     [H,dots,INFO] = schurComp(H,dots,spSt,spEnd,INFO,_RELTOL);
 
+    spIdx = spSt - 1;
     #perform this again
-    [H, dots, eg2] = cleanBot(H,dots,spIdx,sym,toplt,toprt,INFO,_EXTRASPIKE,_RELTOL);
+    [H, dots, spIdx, eg2] = cleanBot(H,dots,spIdx,sym,toplt,toprt,INFO,_EXTRASPIKE,_RELTOL);
     eg = [eg, eg2];
   end
 
@@ -612,21 +610,7 @@ function [H, dots, eg] = cleanTop(H, dots, spIdx, sym, toplt, toprt, INFO,_EXTRA
     end
   end
 
-  #reduce H to hessenberg form
-  n = length(H);
-  for toHess = spIdx:-1:3
-    #The indices look funny because they were desinged to take
-    #input from the trains and we don't need trains here
-    [H, dots] = hhStepB(H,n+1-toHess,n-1,dots,sym);
-    if(toplt)
-      pltMat(H);
-      if(toprt)
-        print(sprintf('../impStepPlts/impstep%03d.png',++pltNum));
-      else
-        pause(_PAUSELEN);
-      endif
-    endif
-  end
+  [H, dots] = finishTop(H,dots,spIdx,sym,toplt,toprt);
 
   if(tryAgain)
     #respike
@@ -639,4 +623,40 @@ function [H, dots, eg] = cleanTop(H, dots, spIdx, sym, toplt, toprt, INFO,_EXTRA
     eg = [eg, eg2];
   end
 
+end
+
+function [H, dots] = finishTop(H,dots,stIdx, sym, toplt, toprt)
+  #reduce H to hessenberg form
+  n = length(H);
+  pltNum = 0;
+  for toHess = stIdx:-1:3
+    #The indices look funny because they were desinged to take
+    #input from the trains and we don't need trains here
+    [H, dots] = hhStepB(H,n+1-toHess,n-1,dots,sym);
+    if(toplt)
+      pltMat(H);
+      if(toprt)
+        print(sprintf('../impStepPlts/impstepFinish%03d.png',++pltNum),'-dpng');
+      else
+        pause(0.0);
+      endif
+    endif
+  end
+end
+
+function [H, dots] = finishBot(H,dots,stIdx,sym,toplt,toprt)
+  #reduce H to hessenberg form
+  n = length(H);
+  pltNum = 0;
+  for toHess = stIdx:length(H)
+    [H, dots] = hhStepR(H,toHess,n,dots,sym);
+    if(toplt)
+      pltMat(H);
+      if(toprt)
+        print(sprintf('../impStepPlts/impstepFinish%03d.png',++pltNum),'-dpng');
+      else
+        pause(0.0);
+      endif
+    endif
+  end
 end

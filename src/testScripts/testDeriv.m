@@ -155,11 +155,11 @@ if(exist('tradTrain','var') && tradTrain == true)
     d = rand(10,1); 
     d /= norm(d);
   end
-  [B,~,~,INFO] = trainBust(A,s,d);
+  [B,~,~,~,INFO] = trainBust(A,s,d,false,false,'b',false);
   x = 10.^(-10:1/3:0);
   ers = zeros(length(x),1);
   for i=1:length(x); 
-    [OUT{i},~,~,~] = trainBust(A,s+x(i)*d,[]);
+    [OUT{i},~,~,~,~] = trainBust(A,s+x(i)*d,[],false,false,'b',false);
     ers(i) = [norm(B + x(i)*INFO.dots{1}.H - OUT{i},'fro')]; 
   end
   figure();
