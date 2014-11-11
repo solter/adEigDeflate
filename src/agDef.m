@@ -1,4 +1,4 @@
-function [numDef] = msqri(H,s)
+function [numDef] = agDef(H,s)
   MAXITER = 150;
   numDef = [];
   n = length(H);
@@ -9,6 +9,7 @@ function [numDef] = msqri(H,s)
     numDef = [numDef, n1 - n];
     shifts = eig(H(n-s+1:n,n-s+1:n));
     H = trainBust(H,real(shifts),[],false,false,'b',true);
+    n = length(H);
     
     #check for deflation
     for i=n-s+1:n
