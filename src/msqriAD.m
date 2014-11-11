@@ -37,8 +37,21 @@ function [numDef] = msqriAD(H,s)
       tmp = diag(INFO.dots{i}.H,-1);
       Jac(:,i) = tmp(length(tmp) - s + 1:end);
     end
-    #Raw Newton
-    shifts = shifts - Jac\f;
+    #Get low rank stuff
+    [U,S,V] = svd(Jac,1);
+    S = diag(S);
+    S(S < .1*S(1,1)) = [];
+    U = U(:,1:length(S));
+    V = V(:,1:length(S));
+
+    up = V*diag(1./S)*U'*f;
+    if(norm(up)/norm(shifts) < 1e-4)
+      shifts = randn(length(shifts),1);
+      pltMat(B);
+    else
+      #Newton
+      shifts = shifts - V*diag(1./S)*U'*f
+    end
 
   until(length(H) < n1/2 || length(numDef) > MAXITER)
 end

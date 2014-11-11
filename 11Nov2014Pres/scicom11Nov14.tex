@@ -234,11 +234,12 @@
   \begin{frame}{AD Definitions}
     \begin{itemize}
       \item the shifts $\vec{\sigma}$ form a natural set of inputs
-      \item for convenience, $f:\mathbb{R}^s \to \mathbb{R}^s$
-      \item define $J_{i,j}(\vec{\sigma}) = \dfrac{\partial f_i}{\partial \sigma_j}(\vec{\sigma})$, so $J \in \mathbb{R}^{s \times s}$
+      \item $f:\mathbb{R}^s \to \mathbb{R}^t$
+      \item define $J_{i,j}(\vec{\sigma}) = \dfrac{\partial f_i}{\partial \sigma_j}(\vec{\sigma})$, so $J \in \mathbb{R}^{t \times s}$
       \item Assume we want to find $\vec{\sigma}$ such that $f(\vec{\sigma}) = \vec{0}$
       \item Newton's method provides an update procedure $\vec{\sigma}^{(n+1)} = \vec{\sigma}^{(n)} - J^{-1}(\vec{\sigma}^{(n)}) f(\vec{\sigma}^{(n)})$
     \end{itemize}
+    Note that if $J$ isn't square, some sort of pseudo-inverse must be employed
   \end{frame}
 
 
@@ -330,10 +331,9 @@
       \item Schur decomposion is not unique since the eigenvalues can be reordered.
         Thus they were reordered to yield minimum value in the spike tips
       \item For aggressive early deflation, a second spike on the deflated matrix
-        without another QR iteration can yield further deflatable eigenvalues \cite{}
-      \item For all the AD methods, there is freedom to choose a larger or smaller set of
-        outputs, but the optimization strategy would have to change.
-      \item AD allows for further derivatives to be calculated in the same manner
+        without another QR iteration can yield further deflatable eigenvalues which are deflated\cite{}
+      \item testing has shown that the Jacobian becomes singular very quickly.
+        To avoid the shifts exploding, a low-rank approximation for the Jacobian is used.
     \end{itemize}
   \end{frame}
 
