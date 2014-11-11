@@ -36,7 +36,7 @@
 ##    hspIdx -> horizontal spike's row index (only for middle)
 ##    nz -> count of zeros in spikes
 ## @end deftypefn
-function [H, egs, shiftDerivs, spikes, INFO] = trainBust(H, Shifts, shiftSeed, toplt = false, toprt = false, middle = 'm', reorder = false)
+function [H, egs, shiftDerivs, spikes, INFO] = trainBust(H, Shifts, shiftSeed, toplt = false, toprt = false, middle = 'm')
   A = H;  
   #TODO: actually deflate matrix, so far only finds deflation points while pushing bulges
   #need to do deflation logic for spike
@@ -223,11 +223,6 @@ function [H, egs, shiftDerivs, spikes, INFO] = trainBust(H, Shifts, shiftSeed, t
   INFO.HPreSchur = H;
   [H, dots, INFO] = schurComp(H, dots, spSt, spEnd, INFO, _RELTOL);
   
-  #actually extract the appropriate spikes and their shifts
-  shiftDerivs = [];
-  if(middle == 'm')
-    INFO.dots = dots;
-
   if(toplt)
     pltMat(H);
     if(toprt)
@@ -238,45 +233,47 @@ function [H, egs, shiftDerivs, spikes, INFO] = trainBust(H, Shifts, shiftSeed, t
   endif
 
   #Clean up back to hessenberg form
-  if(middle = 'm')
-    #if enough zeros in spikes, collapse to hessenberg and reset derivatives to zero
-    if(INFO.nz > spEnd-spSt + 1)#if more than half of spike values are zero
-      #collapse to hessenberg form
-
-      #split matrix
-
-      #spike matrix and hope for deflation????
-
-    else 
+  if(middle == 'm')
+    #if enough zeros in spikes tips, deflate
+    maxRow = max(find(H(:,spSt-1)));
+    #check if its a complex conjugate pair
+    if(abs(H(maxRow+1,maxRow)) > sqrt(eps))
+      maxRow += 1;%make sure R encompasses this
+    end
+    minCol = min(find(H(spEnd+1,:)));
+    #if it is splittable
+    if(maxRow < minCol)
+      #split
+      Htop = H(1:maxRow,1:maxRow);
+      Hbot = H(maxRow+1:end, maxRow+1:end);
+      for i=1:s
+        dots{i}.Htop = dots{i}.H(1:maxRow,1:maxRow);
+        dots{i}.Hbot = dots{i}.H(maxRow+1:end, maxRow+1:end);
+      end
+      [Htop, dots, egTop] = cleanBot(Htop,dots,spSt-1,sym,toplt,toprt,INFO,_EXTRASPIKE,_RELTOL);
+      [Hbot, dots, egBot] = cleanTop(Hbot,dots,spEnd+1 - maxRow,sym,toplt,toprt,INFO,_EXTRASPIKE,_RELTOL);
+      #TODO: reorganize this information for use by end user
+    else
       #if not enough zeros in spikes, record them and their derivates
       for i=1:s
         shiftDerivs(i,:) = [ (dots{i}.H)(spSt:spEnd,spSt-1)' (dots{i}.H)(spEnd+1,spSt:spEnd) ]; 
       end
       spikes = [ H(spSt:spEnd,spSt-1)' H(spEnd+1,spSt:spEnd) ]; 
     end
-  else#if pushed to top or bottom
-
-    while(INFO.nz > 0)#if zeros in spikes
-      #reorder and deflate
-
-      #spike out again
+  elseif(middle == 't')#if pushed to top 
+      #TODO: reorganize this information for use by end user
+    [Htop, dots, egTop] = cleanTop(H,dots,spEnd+1,sym,toplt,toprt,INFO,_EXTRASPIKE,_RELTOL);
+    for i=1:s
+      shiftDerivs(i,:) = [ (dots{i}.H)(spEnd+1,spSt:spEnd) ];
     end
-
-    #record spikes and their derivates
-    if(middle == 'b')
-      for i=1:s
-        shiftDerivs(i,:) = [ (dots{i}.H)(spSt:spEnd,spSt-1)' ];
-      end
-      spikes = [ H(spSt:spEnd,spSt-1)' ];
-    elseif(middle == 't')
-      for i=1:s
-        shiftDerivs(i,:) = [ (dots{i}.H)(spEnd+1,spSt:spEnd) ];
-      end
-      spikes = [ H(spEnd+1,spSt:spEnd) ];
+    spikes = [ H(spEnd+1,spSt:spEnd) ];
+  elseif(middle == 'b') #if pushed to bottom
+      #TODO: reorganize this information for use by end user
+    [Hbot, dots, egBot] = cleanBot(H,dots,spSt-1,sym,toplt,toprt,INFO,_EXTRASPIKE,_RELTOL);
+    for i=1:s
+      shiftDerivs(i,:) = [ (dots{i}.H)(spSt:spEnd,spSt-1)' ];
     end
-
-    #collapse to hessenberg
-    
+    spikes = [ H(spSt:spEnd,spSt-1)' ];
   end
 
   if(toprt)
@@ -291,7 +288,7 @@ function [sn] = sgn(v)
   else
     sn= -1;
   endif
-endfunction
+end#function
 
 function [] = pltMat(H)
     imagesc(logNAN10(abs(H)));
@@ -305,7 +302,7 @@ function [out] = logNAN10(in)
   out = log10(in);
   out(isinf(out)) = nan;
   out(out < -16) = nan;
-endfunction
+end#function
 
 #perform a householder transformation, pushing a bulge rightwards
 function [H, dots] = hhStepR(H,stIdx, eIdx, dots,sym,v=[])
@@ -422,6 +419,12 @@ function [H,dots,INFO] = schurComp(H,dots,spSt,spEnd,INFO,_RELTOL)
   #actually perform the schur decomposion (AU = UT)
   [spRot, H(spSt:spEnd,spSt:spEnd)] = schur(H(spSt:spEnd,spSt:spEnd));
 
+  middle = 'm';
+  if(spSt == 1)
+    middle = 't';
+  elseif(spEnd == length(H))
+    middle = 'b';
+  end
   #sort the decomposition to achieve good spikes
   [Q, T, ap] = swapSchur(spRot, H(spSt:spEnd,spSt:spEnd), middle, _RELTOL);
 
@@ -485,6 +488,155 @@ function [H,dots,INFO] = schurComp(H,dots,spSt,spEnd,INFO,_RELTOL)
     H(spSt:spEnd,spSt-1) = H(spSt,spSt-1) * vSpike;
     INFO.nz += sum(vsz);
     INFO.vspIdx = spSt - 1;
+  end
+
+end
+
+#finishes sweep to the bottom of a matrix
+function [H, dots, eg] = cleanBot(H, dots, spIdx, sym, toplt, toprt,INFO, _EXTRASPIKE, _RELTOL)
+  s = length(dots);
+  n = length(H);
+  defIdx = max(find(H(:,spIdx)))+1;#topmost zero
+  spLength = n - spIdx;
+  if(defIdx <= n && abs(H(defIdx,defIdx-1)) > _RELTOL)
+    #this represents the bottom portion of a complex
+    #conjugate 2x2 block, and the top half of it is not
+    #deflatable, so skip it
+    defIdx++;
+  end
+  B = [];
+  tryAgain = false;
+  if(defIdx <= n)
+    B = H(defIdx:n,defIdx:n);
+    tryAgain = true;
+  end
+  H = H(1:defIdx-1, 1:defIdx-1);
+  for i=1:s
+    dots{i}.H = dots{i}.H(1:defIdx-1, 1:defIdx-1);
+  end
+  eg = [];
+  if( ~isempty(B) )#if deflatable
+    #grab the eigenvalues from the deflated matrix
+    while(~isempty(B))
+      if(length(B) == 1)
+        eg = [eg,B];
+        B = [];
+      else
+        if(abs(B(2,1)) > _RELTOL)
+          #extract complex cojugate pair
+          rp = B(1,1) + B(2,2);
+          rp *= .5;
+          ip = rp^2 - B(1,1)*B(2,2) + B(1,2)*B(2,1);
+          ip = sqrt(ip);
+          eg = [eg, rp + ip, rp - ip];
+          B = B(3:end,3:end);
+        else
+          #extract the eigenvalue
+          eg = [eg,B(1,1)];
+          B = B(2:end,2:end);
+        end
+      end
+    end
+  end
+
+  #reduce H to hessenberg form
+  n = length(H);
+  for toHess = spIdx+1:length(H)
+    [H, dots] = hhStepR(H,toHess,n,dots,sym);
+    if(toplt)
+      pltMat(H);
+      if(toprt)
+        print(sprintf('../impStepPlts/impstep%03d.png',++pltNum));
+      else
+        pause(_PAUSELEN);
+      endif
+    endif
+  end
+
+  if(tryAgain)
+    #respike
+    spSt = n - spLength;#spike will form 1 left of here
+    spEnd = n;
+    [H,dots,INFO] = schurComp(H,dots,spSt,spEnd,INFO,_RELTOL);
+
+    #perform this again
+    [H, dots, eg2] = cleanBot(H,dots,spIdx,sym,toplt,toprt,INFO,_EXTRASPIKE,_RELTOL);
+    eg = [eg, eg2];
+  end
+
+end
+
+#finishes a sweep to the top of a matrix
+function [H, dots, eg] = cleanTop(H, dots, spIdx, sym, toplt, toprt, INFO,_EXTRASPIKE, _RELTOL)
+  s = length(dots);
+  defIdx = min(find(H(spIdx,:))) - 1;#rightmost zero
+  spLength = spIdx;
+  if(defIdx >= 1 && abs(H(defIdx+1,defIdx)) > _RELTOL)
+    #this represents the bottom portion of a complex
+    #conjugate 2x2 block, and the top half of it is not
+    #deflatable, so skip it
+    defIdx--;
+  end
+  T = [];
+  tryAgain = false;
+  if(defIdx >= 1)
+    T = H(1:defIdx,1:defIdx);
+    tryAgain = true;
+  end
+  H = H(defIdx+1:end, defIdx+1:end);
+  for i=1:s
+    dots{i}.H = dots{i}.H(defIdx+1:end, defIdx+1:end);
+  end
+  eg = [];
+  if( ~isempty(T) )#if deflatable
+    #grab the eigenvalues from the deflated matrix
+    while(~isempty(T))
+      if(length(T) == 1)
+        eg = [eg,T];
+        T = [];
+      else
+        if(abs(T(2,1)) > _RELTOL)
+          #extract complex cojugate pair
+          rp = T(1,1) + T(2,2);
+          rp *= .5;
+          ip = rp^2 - T(1,1)*T(2,2) + T(1,2)*T(2,1);
+          ip = sqrt(ip);
+          eg = [eg, rp + ip, rp - ip];
+          T = T(3:end,3:end);
+        else
+          #extract the eigenvalue
+          eg = [eg,T(1,1)];
+          T = T(2:end,2:end);
+        end
+      end
+    end
+  end
+
+  #reduce H to hessenberg form
+  n = length(H);
+  for toHess = spIdx:-1:3
+    #The indices look funny because they were desinged to take
+    #input from the trains and we don't need trains here
+    [H, dots] = hhStepB(H,n+1-toHess,n-1,dots,sym);
+    if(toplt)
+      pltMat(H);
+      if(toprt)
+        print(sprintf('../impStepPlts/impstep%03d.png',++pltNum));
+      else
+        pause(_PAUSELEN);
+      endif
+    endif
+  end
+
+  if(tryAgain)
+    #respike
+    spSt = 1;
+    spEnd = spLength;
+    [H, dots, INFO] = schurComp(H, dots, spSt, spEnd, INFO, _RELTOL);
+
+    #perform this again
+    [H,dots,eg2] = cleanTop(H,dots,spIdx,sym,toplt,toprt);
+    eg = [eg, eg2];
   end
 
 end
